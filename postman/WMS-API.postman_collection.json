@@ -101,6 +101,36 @@
           ]
         },
         {
+          "name": "Регистрация — неверный email и слабый пароль",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"short\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/register"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "const fields = pm.response.json().error.details.map((d) => d.field);",
+                  "pm.test('ошибки email и password', () => pm.expect(fields).to.include.members(['email', 'password']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Регистрация — неверный email",
           "request": {
             "method": "POST",
