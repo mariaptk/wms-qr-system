@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{baseUrl}}/products"
+method: GET
+headers:
+  Origin: https://evil.example
+scripts:
+  - type: afterResponse
+    code: pm.test('403', () => pm.response.to.have.status(403));
+    language: text/javascript
+order: 9000

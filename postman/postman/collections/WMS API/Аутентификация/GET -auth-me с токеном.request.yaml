@@ -1,0 +1,15 @@
+$kind: http-request
+name: GET /auth/me с токеном
+url: "{{baseUrl}}/auth/me"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{workerToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('нет хеша', () => pm.expect(pm.response.json().data.passwordHash).to.be.undefined);
+    language: text/javascript
+order: 10000

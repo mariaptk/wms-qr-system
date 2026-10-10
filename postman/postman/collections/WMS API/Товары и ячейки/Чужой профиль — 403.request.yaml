@@ -1,0 +1,12 @@
+$kind: http-request
+url: "{{baseUrl}}/users/00000000-0000-4000-8000-000000000001"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{workerToken}}"
+scripts:
+  - type: afterResponse
+    code: pm.test('403', () => pm.response.to.have.status(403));
+    language: text/javascript
+order: 8000

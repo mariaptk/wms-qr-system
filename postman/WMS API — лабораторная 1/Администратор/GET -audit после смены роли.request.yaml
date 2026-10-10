@@ -1,0 +1,13 @@
+$kind: http-request
+name: GET /audit после смены роли
+url: "{{baseUrl}}/audit"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: pm.test('есть user.role_changed', () => pm.expect(pm.response.json().data.map((r) => r.action)).to.include('user.role_changed'));
+    language: text/javascript
+order: 8000

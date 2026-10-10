@@ -1,0 +1,11 @@
+$kind: http-request
+name: GET /locations без токена
+url: "{{baseUrl}}/locations"
+method: GET
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: pm.test('401', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 7000

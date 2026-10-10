@@ -1,0 +1,13 @@
+$kind: http-request
+name: GET /audit кладовщиком — 403
+url: "{{baseUrl}}/audit"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{workerToken}}"
+scripts:
+  - type: afterResponse
+    code: pm.test('403', () => pm.response.to.have.status(403));
+    language: text/javascript
+order: 5000

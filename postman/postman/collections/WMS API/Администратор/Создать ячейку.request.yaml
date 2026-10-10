@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/locations"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "code": "A-01-03",
+      "zone": "Хранение",
+      "description": "Стеллаж A"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('locationId', pm.response.json().data.id);
+    language: text/javascript
+order: 3000

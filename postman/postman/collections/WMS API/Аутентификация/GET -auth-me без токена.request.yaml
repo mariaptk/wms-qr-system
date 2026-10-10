@@ -1,0 +1,11 @@
+$kind: http-request
+name: GET /auth/me без токена
+url: "{{baseUrl}}/auth/me"
+method: GET
+auth:
+  type: noauth
+scripts:
+  - type: afterResponse
+    code: pm.test('401', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 9000

@@ -1,0 +1,17 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "lock@example.com",
+      "password": "wrong-password"
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('423', () => pm.response.to.have.status(423));
+    language: text/javascript
+order: 6000

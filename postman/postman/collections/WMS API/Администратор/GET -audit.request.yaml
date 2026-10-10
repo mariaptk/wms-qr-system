@@ -1,0 +1,18 @@
+$kind: http-request
+name: GET /audit
+url: "{{baseUrl}}/audit"
+method: GET
+auth:
+  type: bearer
+  credentials:
+    token: "{{adminToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('есть запись об удалении', () => {
+        const actions = pm.response.json().data.map((row) => row.action);
+        pm.expect(actions).to.include('product.deleted');
+      });
+    language: text/javascript
+order: 4000

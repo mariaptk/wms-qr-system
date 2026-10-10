@@ -1,0 +1,12 @@
+$kind: http-request
+name: GET /health
+url: "{{baseUrl}}/health"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('X-Frame-Options DENY', () => pm.response.to.have.header('X-Frame-Options', 'DENY'));
+      pm.test('CSP', () => pm.expect(pm.response.headers.get('Content-Security-Policy')).to.include("frame-ancestors"));
+    language: text/javascript
+order: 1000

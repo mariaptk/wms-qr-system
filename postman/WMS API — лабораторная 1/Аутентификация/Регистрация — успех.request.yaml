@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{baseUrl}}/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "worker@example.com",
+      "password": "Password1!",
+      "name": "Кладовщик",
+      "role": "admin"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.test('роль user, несмотря на role=admin в теле', () => pm.expect(body.data.role).to.eql('user'));
+      pm.test('хеш пароля не вернулся', () => pm.expect(body.data.passwordHash).to.be.undefined);
+      pm.collectionVariables.set('userId', body.data.id);
+    language: text/javascript
+order: 1000

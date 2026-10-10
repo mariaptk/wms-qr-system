@@ -1,0 +1,28 @@
+$kind: http-request
+name: POST /products кладовщиком, HTML в названии
+url: "{{baseUrl}}/products"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "sku": "MILK-01",
+      "name": "<script>alert(1)</script>Молоко",
+      "unit": "pcs",
+      "createdBy": "00000000-0000-0000-0000-000000000000"
+    }
+auth:
+  type: bearer
+  credentials:
+    token: "{{workerToken}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const body = pm.response.json();
+      pm.test('теги вырезаны', () => pm.expect(body.data.name).to.eql('alert(1)Молоко'));
+      pm.collectionVariables.set('productId', body.data.id);
+    language: text/javascript
+order: 4000
