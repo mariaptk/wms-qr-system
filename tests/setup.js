@@ -1,0 +1,9 @@
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = 'test-access-secret-should-be-32-characters-min';
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-should-be-32-characters-xx';
+process.env.BCRYPT_ROUNDS = '4';
+process.env.TEST_DATABASE_URL = 'postgres://wms:wms@127.0.0.1:5432/wms_test';
+process.env.CORS_ORIGINS = 'http://localhost:5173,http://localhost:3000';
+process.env.DATABASE_SSL = 'false';
+process.env.MAX_SESSIONS = '3';
+process.env.BODY_LIMIT = '100kb';
