@@ -12,7 +12,8 @@ async function seed() {
   }
 
   await sequelize.authenticate();
-  await sequelize.sync();
+  // --reset очищает все таблицы, чтобы коллекцию Postman можно было пройти заново.
+  await sequelize.sync({ force: process.argv.includes('--reset') });
 
   const existing = await User.unscoped().findOne({ where: { email } });
   if (existing) {

@@ -48,7 +48,9 @@ npm test
 npm run lint
 ```
 
-Коллекция Postman: `postman/WMS-API.postman_collection.json`. Перед папкой «Администратор» выполните `npm run seed`.
+Коллекция Postman: `postman/WMS-API.postman_collection.json`. Перед прогоном выполните `npm run db:reset` (пересоздаёт таблицы и администратора) и перезапустите сервер: лимиты запросов хранятся в памяти. Папки выполняются по порядку.
+
+Отчёт по лабораторной и инструкция по снимкам экрана лежат в `reports/`.
 
 ## Эндпоинты
 
