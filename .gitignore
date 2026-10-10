@@ -5,3 +5,12 @@ logs/*
 coverage/
 *.log
 .DS_Store
+
+# Postman v3 (Local Mode): коллекция хранится в postman/WMS-API.postman_collection.json
+.postman/
+postman/*
+!postman/WMS-API.postman_collection.json
+
+# Временные файлы Word
+~$*
+~WRL*.tmp
