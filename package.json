@@ -1,7 +1,7 @@
 {
   "name": "wms-qr-system",
-  "version": "0.1.0",
-  "description": "Безопасный REST API системы управления складом (лабораторная 1)",
+  "version": "0.2.0",
+  "description": "REST API системы управления складом и отгрузкой товаров с QR-кодами",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
