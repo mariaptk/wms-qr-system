@@ -188,7 +188,9 @@ describe('роли и чужие ресурсы', () => {
     const created = await request(app)
       .post('/products')
       .set(auth(workerLogin.body.data.accessToken))
-      .send({ sku: 'MILK-01', name: 'Молоко', unit: 'pcs', createdBy: admin.id });
+      .send({
+        sku: 'MILK-01', name: 'Молоко', category: 'food', unit: 'pcs', price: 2.5, createdBy: admin.id,
+      });
     expect(created.status).toBe(201);
     expect(created.body.data.createdBy).toBe(worker.id);
 
@@ -208,16 +210,18 @@ describe('роли и чужие ресурсы', () => {
     expect(audit.userId).toBe(admin.id);
   });
 
-  test('кладовщик не меняет товар, старший смены меняет', async () => {
+  test('кладовщик не меняет чужой товар, старший смены меняет', async () => {
+    const author = await createUser({ email: 'author@example.com', role: 'user' });
     const worker = await createUser({ email: 'worker@example.com', role: 'user' });
     const moderator = await createUser({ email: 'shift@example.com', role: 'moderator' });
+    const authorLogin = await login(request(app), author.email);
     const workerLogin = await login(request(app), worker.email);
     const moderatorLogin = await login(request(app), moderator.email);
 
     const created = await request(app)
       .post('/products')
-      .set(auth(workerLogin.body.data.accessToken))
-      .send({ sku: 'BOX-1', name: 'Коробка' });
+      .set(auth(authorLogin.body.data.accessToken))
+      .send({ sku: 'BOX-1', name: 'Коробка', category: 'household', price: 3 });
 
     const denied = await request(app)
       .patch(`/products/${created.body.data.id}`)
@@ -352,7 +356,13 @@ describe('защита входа', () => {
     const created = await request(app)
       .post('/products')
       .set(auth(logged.body.data.accessToken))
-      .send({ sku: 'A-1', name: '<script>alert(1)</script>Молоко', description: '<b>жирное</b>' });
+      .send({
+        sku: 'A-1',
+        name: '<script>alert(1)</script>Молоко',
+        category: 'food',
+        price: 2.5,
+        description: '<b>жирное</b>',
+      });
 
     expect(created.status).toBe(201);
     expect(created.body.data.name).toBe('alert(1)Молоко');
