@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "WMS API — контрольная работа 1",
-    "description": "CRUD товаров склада с JWT-аутентификацией и ролями. Папки выполняются по порядку: токены и id передаются через переменные коллекции. Артикулы и email содержат runId, поэтому коллекцию можно запускать повторно без сброса базы. Учётная запись администратора задаётся переменными adminEmail и adminPassword (как ADMIN_EMAIL и ADMIN_PASSWORD в .env).",
+    "description": "Отгрузки склада с QR-кодами: JWT-аутентификация, роли, CRUD, статусы, поиск по QR-коду, фильтры и статистика. Папки выполняются по порядку: токены и id передаются через переменные коллекции. Номера заказов и email содержат runId, а даты считаются от сегодняшнего дня, поэтому коллекцию можно запускать повторно без сброса базы. Учётная запись администратора задаётся переменными adminEmail и adminPassword (как ADMIN_EMAIL и ADMIN_PASSWORD в .env).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -22,6 +22,22 @@
       "value": ""
     },
     {
+      "key": "today",
+      "value": ""
+    },
+    {
+      "key": "tomorrow",
+      "value": ""
+    },
+    {
+      "key": "in3days",
+      "value": ""
+    },
+    {
+      "key": "yesterday",
+      "value": ""
+    },
+    {
       "key": "authorToken",
       "value": ""
     },
@@ -34,7 +50,19 @@
       "value": ""
     },
     {
-      "key": "productId",
+      "key": "shipmentId",
+      "value": ""
+    },
+    {
+      "key": "todayShipmentId",
+      "value": ""
+    },
+    {
+      "key": "otherShipmentId",
+      "value": ""
+    },
+    {
+      "key": "qrCode",
       "value": ""
     }
   ],
@@ -56,7 +84,16 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.collectionVariables.set('runId', Date.now().toString(36).toUpperCase());"
+                  "pm.collectionVariables.set('runId', Date.now().toString(36).toUpperCase());",
+                  "const day = (offset) => {",
+                  "  const d = new Date();",
+                  "  d.setDate(d.getDate() + offset);",
+                  "  return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');",
+                  "};",
+                  "pm.collectionVariables.set('today', day(0));",
+                  "pm.collectionVariables.set('tomorrow', day(1));",
+                  "pm.collectionVariables.set('in3days', day(3));",
+                  "pm.collectionVariables.set('yesterday', day(-1));"
                 ]
               }
             }
@@ -333,10 +370,10 @@
       ]
     },
     {
-      "name": "2. Товары — CRUD",
+      "name": "2. Отгрузки — CRUD",
       "item": [
         {
-          "name": "POST /products — создать товар",
+          "name": "POST /shipments — создать отгрузку",
           "request": {
             "method": "POST",
             "header": [
@@ -345,7 +382,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products",
+            "url": "{{baseUrl}}/shipments",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -358,7 +395,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"MILK-{{runId}}\",\n  \"name\": \"Молоко 3,2% 1 л\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 2.49,\n  \"weightKg\": 1.03,\n  \"description\": \"Пастеризованное, тетрапак\",\n  \"role\": \"admin\"\n}"
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-1\",\n  \"customerName\": \"ООО «Гиппо»\",\n  \"deliveryAddress\": \"г. Минск, ул. Притыцкого, 156\",\n  \"plannedDate\": \"{{tomorrow}}\",\n  \"packagesCount\": 3,\n  \"totalWeightKg\": 42.5,\n  \"carrier\": \"Белпочта\",\n  \"comment\": \"Разгрузка с 9:00 до 18:00\",\n  \"status\": \"shipped\",\n  \"qrCode\": \"SHP-0000000000000000\"\n}"
             }
           },
           "event": [
@@ -369,18 +406,21 @@
                 "exec": [
                   "pm.test('201', () => pm.response.to.have.status(201));",
                   "const body = pm.response.json();",
-                  "pm.test('поля сохранены', () => {",
-                  "  pm.expect(body.data.category).to.eql('food');",
-                  "  pm.expect(body.data.price).to.eql(2.49);",
+                  "pm.test('статус new, QR-код выдан сервером', () => {",
+                  "  pm.expect(body.data.status).to.eql('new');",
+                  "  pm.expect(body.data.qrCode).to.match(/^SHP-[0-9A-F]{16}$/);",
+                  "  pm.expect(body.data.qrCode).to.not.eql('SHP-0000000000000000');",
+                  "  pm.expect(body.data.totalWeightKg).to.eql(42.5);",
                   "});",
-                  "pm.collectionVariables.set('productId', body.data.id);"
+                  "pm.collectionVariables.set('shipmentId', body.data.id);",
+                  "pm.collectionVariables.set('qrCode', body.data.qrCode);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "POST /products — кефир",
+          "name": "POST /shipments — на сегодня",
           "request": {
             "method": "POST",
             "header": [
@@ -389,7 +429,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products",
+            "url": "{{baseUrl}}/shipments",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -402,7 +442,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"KEFIR-{{runId}}\",\n  \"name\": \"Кефир 2,5% 0,9 л\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 1.89,\n  \"weightKg\": 0.95\n}"
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-2\",\n  \"customerName\": \"ИП Петров\",\n  \"deliveryAddress\": \"г. Минск, пр. Независимости, 95\",\n  \"plannedDate\": \"{{today}}\",\n  \"packagesCount\": 2,\n  \"totalWeightKg\": 12.8\n}"
             }
           },
           "event": [
@@ -411,14 +451,15 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201', () => pm.response.to.have.status(201));"
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('todayShipmentId', pm.response.json().data.id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "POST /products — мыло",
+          "name": "POST /shipments — второй кладовщик",
           "request": {
             "method": "POST",
             "header": [
@@ -427,7 +468,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products",
+            "url": "{{baseUrl}}/shipments",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -440,7 +481,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"SOAP-{{runId}}\",\n  \"name\": \"Мыло хозяйственное\",\n  \"category\": \"household\",\n  \"unit\": \"pcs\",\n  \"price\": 0.99,\n  \"isActive\": false\n}"
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-3\",\n  \"customerName\": \"ЗАО «Евроторг»\",\n  \"deliveryAddress\": \"Минская обл., д. Щомыслица, Логистический центр\",\n  \"plannedDate\": \"{{in3days}}\",\n  \"packagesCount\": 6,\n  \"totalWeightKg\": 180,\n  \"carrier\": \"Собственный транспорт\"\n}"
             }
           },
           "event": [
@@ -449,56 +490,29 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201', () => pm.response.to.have.status(201));"
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('otherShipmentId', pm.response.json().data.id);"
                 ]
               }
             }
           ]
         },
         {
-          "name": "POST /products — дрель",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/products",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{otherToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"sku\": \"DRILL-{{runId}}\",\n  \"name\": \"Дрель ударная\",\n  \"category\": \"building\",\n  \"unit\": \"pcs\",\n  \"price\": 120,\n  \"weightKg\": 1.8\n}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('201', () => pm.response.to.have.status(201));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET /products — список",
+          "name": "GET /shipments — список",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/products"
+            "url": "{{baseUrl}}/shipments",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           },
           "event": [
             {
@@ -508,18 +522,28 @@
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
                   "const body = pm.response.json();",
-                  "pm.test('есть meta', () => pm.expect(body.meta).to.include.keys('page', 'limit', 'total', 'pages'));"
+                  "pm.test('есть meta', () => pm.expect(body.meta.total).to.be.at.least(3));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "GET /products/:id — детали",
+          "name": "GET /shipments/:id — детали",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/products/{{productId}}"
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           },
           "event": [
             {
@@ -528,14 +552,14 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.test('тот же товар', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('productId')));"
+                  "pm.test('та же отгрузка', () => pm.expect(pm.response.json().data.qrCode).to.eql(pm.collectionVariables.get('qrCode')));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "PUT /products/:id — автор обновляет",
+          "name": "PUT /shipments/:id — автор обновляет",
           "request": {
             "method": "PUT",
             "header": [
@@ -544,7 +568,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products/{{productId}}",
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -557,7 +581,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"MILK-{{runId}}\",\n  \"name\": \"Молоко 2,5% 1 л\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 2.19,\n  \"weightKg\": 1.03,\n  \"description\": \"Пастеризованное, тетрапак\"\n}"
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-1\",\n  \"customerName\": \"ООО «Гиппо»\",\n  \"deliveryAddress\": \"г. Минск, ул. Притыцкого, 156\",\n  \"plannedDate\": \"{{tomorrow}}\",\n  \"packagesCount\": 4,\n  \"totalWeightKg\": 55,\n  \"carrier\": \"Белпочта\",\n  \"comment\": \"Разгрузка с 9:00 до 18:00\"\n}"
             }
           },
           "event": [
@@ -567,166 +591,10 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.test('цена обновлена', () => pm.expect(pm.response.json().data.price).to.eql(2.19));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "PATCH /products/:id — частичное изменение",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/products/{{productId}}",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{authorToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"weightKg\": 1.05\n}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.test('вес обновлён', () => pm.expect(pm.response.json().data.weightKg).to.eql(1.05));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "3. Фильтрация, поиск, статистика",
-      "item": [
-        {
-          "name": "GET /products — категория и сортировка по цене",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/products?category=food&search={{runId}}&sort=price&order=asc"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200', () => pm.response.to.have.status(200));",
-                  "const skus = pm.response.json().data.map((p) => p.sku.split('-')[0]);",
-                  "pm.test('только продукты, по возрастанию цены', () => pm.expect(skus).to.eql(['KEFIR', 'MILK']));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET /products — диапазон цены",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/products?minPrice=1&maxPrice=100&search={{runId}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200', () => pm.response.to.have.status(200));",
-                  "const prices = pm.response.json().data.map((p) => p.price);",
-                  "pm.test('все цены от 1 до 100', () => prices.forEach((x) => pm.expect(x).to.be.within(1, 100)));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET /products — поиск по названию",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/products?search=дрель"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.test('найдена дрель', () => pm.expect(pm.response.json().data.map((p) => p.category)).to.include('building'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET /products — только неактивные",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/products?isActive=false&search={{runId}}"
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.test('одно мыло', () => pm.expect(pm.response.json().data.map((p) => p.sku.split('-')[0])).to.eql(['SOAP']));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET /products/stats — статистика",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/products/stats",
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{authorToken}}",
-                  "type": "string"
-                }
-              ]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json().data;",
-                  "pm.test('итоги и категории', () => {",
-                  "  pm.expect(body).to.include.keys('total', 'active', 'inactive', 'avgPrice', 'byCategory');",
-                  "  pm.expect(body.byCategory.map((c) => c.category)).to.include.members(['food', 'household', 'building']);",
+                  "const body = pm.response.json();",
+                  "pm.test('поля обновлены, QR-код прежний', () => {",
+                  "  pm.expect(body.data.packagesCount).to.eql(4);",
+                  "  pm.expect(body.data.qrCode).to.eql(pm.collectionVariables.get('qrCode'));",
                   "});"
                 ]
               }
@@ -736,25 +604,32 @@
       ]
     },
     {
-      "name": "4. Ошибки и права доступа",
+      "name": "3. Статусы и QR-код",
       "item": [
         {
-          "name": "POST /products без токена — 401",
+          "name": "PATCH /shipments/:id/status — сборка",
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products",
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}/status",
             "auth": {
-              "type": "noauth"
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"NOAUTH-{{runId}}\",\n  \"name\": \"Молоко 3,2% 1 л\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 2.49,\n  \"weightKg\": 1.03,\n  \"description\": \"Пастеризованное, тетрапак\"\n}"
+              "raw": "{\n  \"status\": \"picking\"\n}"
             }
           },
           "event": [
@@ -763,14 +638,191 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('401', () => pm.response.to.have.status(401));"
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('picking', () => pm.expect(pm.response.json().data.status).to.eql('picking'));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "PUT /products/:id без токена — 401",
+          "name": "PATCH /shipments/:id/status — упаковано",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"packed\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /shipments/:id/status — недопустимый переход",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"delivered\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('разрешённые переходы', () => pm.expect(pm.response.json().error.details.allowed).to.eql(['shipped', 'cancelled']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments/scan/:code — поиск по QR-коду",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments/scan/{{qrCode}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('найдена нужная отгрузка', () => pm.expect(pm.response.json().data.id).to.eql(pm.collectionVariables.get('shipmentId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments/:id/qr — картинка QR-кода",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}/qr",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('PNG', () => pm.expect(pm.response.headers.get('Content-Type')).to.eql('image/png'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /shipments/:id/status — отгружено",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{otherToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"shipped\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('время отгрузки записано', () => pm.expect(pm.response.json().data.shippedAt).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /shipments/:id — после отгрузки — 409",
           "request": {
             "method": "PUT",
             "header": [
@@ -779,13 +831,20 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products/{{productId}}",
+            "url": "{{baseUrl}}/shipments/{{shipmentId}}",
             "auth": {
-              "type": "noauth"
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"MILK-{{runId}}\",\n  \"name\": \"Молоко 3,2% 1 л\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 2.49,\n  \"weightKg\": 1.03,\n  \"description\": \"Пастеризованное, тетрапак\"\n}"
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-1\",\n  \"customerName\": \"ООО «Гиппо»\",\n  \"deliveryAddress\": \"г. Минск, ул. Притыцкого, 156\",\n  \"plannedDate\": \"{{tomorrow}}\",\n  \"packagesCount\": 3,\n  \"totalWeightKg\": 42.5,\n  \"carrier\": \"Белпочта\",\n  \"comment\": \"Разгрузка с 9:00 до 18:00\"\n}"
             }
           },
           "event": [
@@ -794,18 +853,191 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('401', () => pm.response.to.have.status(401));"
+                  "pm.test('409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Фильтрация, поиск, статистика",
+      "item": [
+        {
+          "name": "GET /shipments — по плановой дате",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments?search={{runId}}&sort=plannedDate&order=asc",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const numbers = pm.response.json().data.map((s) => s.orderNumber);",
+                  "pm.test('порядок отгрузок', () => pm.expect(numbers).to.eql(['ORD-' + pm.collectionVariables.get('runId') + '-2', 'ORD-' + pm.collectionVariables.get('runId') + '-1', 'ORD-' + pm.collectionVariables.get('runId') + '-3']));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "GET /products/stats без токена — 401",
+          "name": "GET /shipments — по статусу",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/products/stats",
+            "url": "{{baseUrl}}/shipments?status=shipped&search={{runId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const numbers = pm.response.json().data.map((s) => s.orderNumber);",
+                  "pm.test('порядок отгрузок', () => pm.expect(numbers).to.eql(['ORD-' + pm.collectionVariables.get('runId') + '-1']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments — диапазон дат",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments?plannedFrom={{today}}&plannedTo={{tomorrow}}&search={{runId}}&sort=orderNumber",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const numbers = pm.response.json().data.map((s) => s.orderNumber);",
+                  "pm.test('порядок отгрузок', () => pm.expect(numbers).to.eql(['ORD-' + pm.collectionVariables.get('runId') + '-1', 'ORD-' + pm.collectionVariables.get('runId') + '-2']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments — поиск по получателю",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments?search=петров&sort=createdAt&order=desc",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().data;",
+                  "pm.test('найден получатель', () => {",
+                  "  pm.expect(rows.length).to.be.at.least(1);",
+                  "  rows.forEach((s) => pm.expect(s.customerName).to.include('Петров'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments/stats — статистика",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments/stats",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const stats = pm.response.json().data;",
+                  "pm.test('поля статистики', () => {",
+                  "  pm.expect(stats).to.have.all.keys('total', 'byStatus', 'plannedToday', 'overdue', 'packages', 'weightKg');",
+                  "  pm.expect(stats.total).to.be.at.least(3);",
+                  "  pm.expect(stats.byStatus.shipped).to.be.at.least(1);",
+                  "  pm.expect(stats.plannedToday).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Ошибки и права доступа",
+      "item": [
+        {
+          "name": "GET /shipments без токена — 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments",
             "auth": {
               "type": "noauth"
             }
@@ -823,7 +1055,7 @@
           ]
         },
         {
-          "name": "POST /products — пустое тело",
+          "name": "POST /shipments без токена — 401",
           "request": {
             "method": "POST",
             "header": [
@@ -832,7 +1064,69 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products",
+            "url": "{{baseUrl}}/shipments",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-1\",\n  \"customerName\": \"ООО «Гиппо»\",\n  \"deliveryAddress\": \"г. Минск, ул. Притыцкого, 156\",\n  \"plannedDate\": \"{{tomorrow}}\",\n  \"packagesCount\": 3,\n  \"totalWeightKg\": 42.5,\n  \"carrier\": \"Белпочта\",\n  \"comment\": \"Разгрузка с 9:00 до 18:00\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /shipments/:id без токена — 401",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/shipments/{{todayShipmentId}}",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-2\",\n  \"customerName\": \"ИП Петров\",\n  \"deliveryAddress\": \"г. Минск, пр. Независимости, 95\",\n  \"plannedDate\": \"{{today}}\",\n  \"packagesCount\": 2,\n  \"totalWeightKg\": 12.8\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /shipments — пустое тело",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/shipments",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -856,14 +1150,14 @@
                 "exec": [
                   "pm.test('400', () => pm.response.to.have.status(400));",
                   "const fields = pm.response.json().error.details.map((d) => d.field);",
-                  "pm.test('обязательные поля', () => pm.expect(fields).to.include.members(['sku', 'name', 'category', 'price']));"
+                  "pm.test('обязательные поля', () => pm.expect(fields).to.have.members(['orderNumber', 'customerName', 'deliveryAddress', 'plannedDate']));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "POST /products — неверные значения",
+          "name": "POST /shipments — неверные значения",
           "request": {
             "method": "POST",
             "header": [
@@ -872,7 +1166,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products",
+            "url": "{{baseUrl}}/shipments",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -885,7 +1179,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"молоко!\",\n  \"name\": \"Молоко\",\n  \"category\": \"toys\",\n  \"price\": -5,\n  \"weightKg\": \"тяжёлый\"\n}"
+              "raw": "{\n  \"orderNumber\": \"№1\",\n  \"customerName\": \"А\",\n  \"deliveryAddress\": \"Минск\",\n  \"plannedDate\": \"{{yesterday}}\",\n  \"packagesCount\": 0,\n  \"totalWeightKg\": -5\n}"
             }
           },
           "event": [
@@ -895,15 +1189,20 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('400', () => pm.response.to.have.status(400));",
-                  "const fields = pm.response.json().error.details.map((d) => d.field);",
-                  "pm.test('sku, category, price, weightKg', () => pm.expect(fields).to.include.members(['sku', 'category', 'price', 'weightKg']));"
+                  "const messages = Object.fromEntries(pm.response.json().error.details.map((d) => [d.field, d.message]));",
+                  "pm.test('сообщения', () => {",
+                  "  pm.expect(messages.orderNumber).to.eql('Номер заказа: 3–32 символа, латиница, цифры и дефис');",
+                  "  pm.expect(messages.plannedDate).to.eql('Плановая дата отгрузки не может быть в прошлом');",
+                  "  pm.expect(messages.packagesCount).to.eql('Количество мест не меньше 1');",
+                  "  pm.expect(messages.totalWeightKg).to.eql('Вес не может быть отрицательным');",
+                  "});"
                 ]
               }
             }
           ]
         },
         {
-          "name": "POST /products — артикул уже есть",
+          "name": "POST /shipments — номер заказа уже есть",
           "request": {
             "method": "POST",
             "header": [
@@ -912,7 +1211,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products",
+            "url": "{{baseUrl}}/shipments",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -925,7 +1224,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"MILK-{{runId}}\",\n  \"name\": \"Молоко 3,2% 1 л\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 2.49,\n  \"weightKg\": 1.03,\n  \"description\": \"Пастеризованное, тетрапак\"\n}"
+              "raw": "{\n  \"orderNumber\": \"ord-{{runId}}-2\",\n  \"customerName\": \"ИП Петров\",\n  \"deliveryAddress\": \"г. Минск, пр. Независимости, 95\",\n  \"plannedDate\": \"{{today}}\",\n  \"packagesCount\": 2,\n  \"totalWeightKg\": 12.8\n}"
             }
           },
           "event": [
@@ -935,14 +1234,14 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('409', () => pm.response.to.have.status(409));",
-                  "pm.test('сообщение', () => pm.expect(pm.response.json().error.message).to.eql('Товар с таким артикулом уже существует'));"
+                  "pm.test('сообщение', () => pm.expect(pm.response.json().error.message).to.eql('Отгрузка с таким номером заказа уже существует'));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "PUT /products/:id — неполное тело",
+          "name": "PUT /shipments/:id — неполное тело",
           "request": {
             "method": "PUT",
             "header": [
@@ -951,7 +1250,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products/{{productId}}",
+            "url": "{{baseUrl}}/shipments/{{todayShipmentId}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -964,7 +1263,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Только название\"\n}"
+              "raw": "{\n  \"packagesCount\": 5\n}"
             }
           },
           "event": [
@@ -980,7 +1279,7 @@
           ]
         },
         {
-          "name": "PUT /products/:id — чужой кладовщик — 403",
+          "name": "PUT /shipments/:id — чужой кладовщик — 403",
           "request": {
             "method": "PUT",
             "header": [
@@ -989,7 +1288,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products/{{productId}}",
+            "url": "{{baseUrl}}/shipments/{{todayShipmentId}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1002,7 +1301,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"MILK-{{runId}}\",\n  \"name\": \"Подмена\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 2.49,\n  \"weightKg\": 1.03,\n  \"description\": \"Пастеризованное, тетрапак\"\n}"
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-2\",\n  \"customerName\": \"ИП Петров\",\n  \"deliveryAddress\": \"г. Минск, пр. Независимости, 95\",\n  \"plannedDate\": \"{{today}}\",\n  \"packagesCount\": 2,\n  \"totalWeightKg\": 12.8\n}"
             }
           },
           "event": [
@@ -1018,11 +1317,11 @@
           ]
         },
         {
-          "name": "DELETE /products/:id кладовщиком — 403",
+          "name": "DELETE /shipments/:id кладовщиком — 403",
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": "{{baseUrl}}/products/{{productId}}",
+            "url": "{{baseUrl}}/shipments/{{todayShipmentId}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1047,11 +1346,21 @@
           ]
         },
         {
-          "name": "GET /products/123 — неверный id",
+          "name": "GET /shipments/123 — неверный id",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/products/123"
+            "url": "{{baseUrl}}/shipments/123",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           },
           "event": [
             {
@@ -1066,11 +1375,21 @@
           ]
         },
         {
-          "name": "GET /products?sort=passwordHash — 400",
+          "name": "GET /shipments?sort=passwordHash — 400",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/products?sort=passwordHash"
+            "url": "{{baseUrl}}/shipments?sort=passwordHash",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           },
           "event": [
             {
@@ -1085,11 +1404,50 @@
           ]
         },
         {
-          "name": "GET /products/:id — не найден",
+          "name": "GET /shipments/:id — не найдена",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/products/00000000-0000-4000-8000-000000000000"
+            "url": "{{baseUrl}}/shipments/00000000-0000-4000-8000-000000000000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments/scan/:code — неизвестный QR-код",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/shipments/scan/SHP-0000000000000000",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authorToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           },
           "event": [
             {
@@ -1106,10 +1464,10 @@
       ]
     },
     {
-      "name": "5. Администратор",
+      "name": "6. Администратор",
       "item": [
         {
-          "name": "PUT /products/:id администратором",
+          "name": "PUT /shipments/:id администратором",
           "request": {
             "method": "PUT",
             "header": [
@@ -1118,7 +1476,7 @@
                 "value": "application/json"
               }
             ],
-            "url": "{{baseUrl}}/products/{{productId}}",
+            "url": "{{baseUrl}}/shipments/{{otherShipmentId}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1131,7 +1489,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"MILK-{{runId}}\",\n  \"name\": \"Молоко 3,2% 1 л\",\n  \"category\": \"food\",\n  \"unit\": \"l\",\n  \"price\": 2.29,\n  \"weightKg\": 1.03,\n  \"description\": \"Пастеризованное, тетрапак\"\n}"
+              "raw": "{\n  \"orderNumber\": \"ORD-{{runId}}-3\",\n  \"customerName\": \"ЗАО «Евроторг»\",\n  \"deliveryAddress\": \"Минская обл., д. Щомыслица, Логистический центр\",\n  \"plannedDate\": \"{{in3days}}\",\n  \"packagesCount\": 7,\n  \"totalWeightKg\": 180,\n  \"carrier\": \"Собственный транспорт\"\n}"
             }
           },
           "event": [
@@ -1147,11 +1505,49 @@
           ]
         },
         {
-          "name": "DELETE /products/:id администратором",
+          "name": "PATCH /shipments/:id/status — отмена",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/shipments/{{otherShipmentId}}/status",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"cancelled\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /shipments/:id администратором",
           "request": {
             "method": "DELETE",
             "header": [],
-            "url": "{{baseUrl}}/products/{{productId}}",
+            "url": "{{baseUrl}}/shipments/{{todayShipmentId}}",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1176,11 +1572,21 @@
           ]
         },
         {
-          "name": "GET /products/:id после удаления — 404",
+          "name": "GET /shipments/:id после удаления — 404",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/products/{{productId}}"
+            "url": "{{baseUrl}}/shipments/{{todayShipmentId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
           },
           "event": [
             {
