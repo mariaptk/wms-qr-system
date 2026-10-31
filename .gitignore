@@ -10,6 +10,7 @@ coverage/
 .postman/
 postman/*
 !postman/WMS-API.postman_collection.json
+!postman/WMS-KR1.postman_collection.json
 
 # Временные файлы Word
 ~$*

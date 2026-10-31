@@ -3,6 +3,7 @@ const config = require('./config/env');
 const { sequelize, User } = require('./models');
 const { passwordRule } = require('./validators/auth');
 const { logger } = require('./utils/logger');
+const { syncSchema } = require('./config/schema');
 
 async function seed() {
   const { email, password, name } = config.admin;
@@ -13,7 +14,9 @@ async function seed() {
 
   await sequelize.authenticate();
   // --reset очищает все таблицы, чтобы коллекцию Postman можно было пройти заново.
-  await sequelize.sync({ force: process.argv.includes('--reset') });
+  // Без него в существующие таблицы добавляются только новые столбцы, данные остаются.
+  if (process.argv.includes('--reset')) await sequelize.sync({ force: true });
+  else await syncSchema();
 
   const existing = await User.unscoped().findOne({ where: { email } });
   if (existing) {

@@ -1,12 +1,13 @@
 const app = require('./app');
 const config = require('./config/env');
 const { sequelize } = require('./models');
+const { syncSchema } = require('./config/schema');
 const { logger } = require('./utils/logger');
 const { warmDummyHash } = require('./services/authService');
 
 async function start() {
   await sequelize.authenticate();
-  await sequelize.sync();
+  await syncSchema();
   await warmDummyHash();
 
   const server = app.listen(config.port, () => {

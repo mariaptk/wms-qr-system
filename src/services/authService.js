@@ -53,6 +53,13 @@ async function enforceSessionLimit(userId, ip) {
 }
 
 async function register({ email, password, name }) {
+  // email уже приведён к нижнему регистру валидатором; уникальный индекс в базе страхует от гонки.
+  if (await User.unscoped().count({ where: { email } })) {
+    throw new AppError(409, 'Пользователь с таким email уже существует', [
+      { field: 'email', message: 'Email занят' },
+    ]);
+  }
+
   const passwordHash = await bcrypt.hash(password, config.bcryptRounds);
   const user = await User.create({
     email,

@@ -1,14 +1,43 @@
+const {
+  SHIPMENT_STATUSES,
+  SHIPMENT_SORT_FIELDS,
+} = require('../constants/shipments');
+
+const idParam = { in: 'path', name: 'id', required: true, schema: { type: 'string', format: 'uuid' } };
+
+const shipmentProperties = {
+  orderNumber: {
+    type: 'string',
+    pattern: '^[A-Za-z0-9][A-Za-z0-9-]{2,31}$',
+    example: 'ORD-1001',
+    description: 'Номер заказа покупателя. Уникален, хранится в верхнем регистре',
+  },
+  customerName: { type: 'string', minLength: 2, maxLength: 200, example: 'ООО «Гиппо»' },
+  deliveryAddress: { type: 'string', minLength: 5, maxLength: 500, example: 'г. Минск, ул. Притыцкого, 156' },
+  plannedDate: { type: 'string', format: 'date', example: '2026-11-02', description: 'Не раньше сегодняшнего дня' },
+  packagesCount: { type: 'integer', minimum: 1, maximum: 1000, default: 1, example: 3 },
+  totalWeightKg: { type: 'number', nullable: true, minimum: 0, maximum: 50000, example: 42.5 },
+  carrier: { type: 'string', nullable: true, maxLength: 100, example: 'Белпочта' },
+  comment: { type: 'string', nullable: true, maxLength: 2000 },
+};
+
+const shipmentBody = {
+  required: true,
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/ShipmentInput' } } },
+};
+
 const openapi = {
   openapi: '3.0.3',
   info: {
     title: 'WMS API',
-    version: '0.1.0',
-    description: 'Безопасный REST API склада: аутентификация, роли, товары и ячейки.',
+    version: '0.2.0',
+    description: 'REST API склада: аутентификация JWT, роли, отгрузки с QR-кодами, товары и ячейки.',
   },
   servers: [{ url: 'http://localhost:3000' }],
   tags: [
     { name: 'Auth' },
     { name: 'Users' },
+    { name: 'Shipments' },
     { name: 'Products' },
     { name: 'Locations' },
     { name: 'Audit' },
@@ -18,6 +47,28 @@ const openapi = {
       bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
     },
     schemas: {
+      ShipmentInput: {
+        type: 'object',
+        required: ['orderNumber', 'customerName', 'deliveryAddress', 'plannedDate'],
+        properties: shipmentProperties,
+      },
+      Shipment: {
+        allOf: [
+          { $ref: '#/components/schemas/ShipmentInput' },
+          {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              qrCode: { type: 'string', example: 'SHP-5970B8CD152DA8F6', description: 'Выдаётся сервером' },
+              status: { type: 'string', enum: SHIPMENT_STATUSES },
+              shippedAt: { type: 'string', format: 'date-time', nullable: true },
+              createdBy: { type: 'string', format: 'uuid' },
+              createdAt: { type: 'string', format: 'date-time' },
+              updatedAt: { type: 'string', format: 'date-time' },
+            },
+          },
+        ],
+      },
       Error: {
         type: 'object',
         properties: {
@@ -196,6 +247,173 @@ const openapi = {
         security: [{ bearerAuth: [] }],
         parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'string', format: 'uuid' } }],
         responses: { 200: { description: 'Блокировка снята' } },
+      },
+    },
+    '/shipments': {
+      get: {
+        tags: ['Shipments'],
+        summary: 'Список отгрузок с фильтрами, поиском и сортировкой',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { in: 'query', name: 'page', schema: { type: 'integer', minimum: 1, default: 1 } },
+          { in: 'query', name: 'limit', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
+          {
+            in: 'query',
+            name: 'search',
+            description: 'Подстрока в номере заказа, получателе или адресе',
+            schema: { type: 'string' },
+          },
+          { in: 'query', name: 'status', schema: { type: 'string', enum: SHIPMENT_STATUSES } },
+          { in: 'query', name: 'plannedFrom', schema: { type: 'string', format: 'date' } },
+          {
+            in: 'query',
+            name: 'plannedTo',
+            description: 'Не раньше plannedFrom',
+            schema: { type: 'string', format: 'date' },
+          },
+          { in: 'query', name: 'sort', schema: { type: 'string', enum: SHIPMENT_SORT_FIELDS, default: 'plannedDate' } },
+          { in: 'query', name: 'order', schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' } },
+        ],
+        responses: {
+          200: {
+            description: 'Страница отгрузок и meta: page, limit, total, pages, sort, order',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: { type: 'array', items: { $ref: '#/components/schemas/Shipment' } },
+                    meta: { type: 'object' },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: 'Неверный параметр фильтра или сортировки' },
+          401: { description: 'Нет токена' },
+        },
+      },
+      post: {
+        tags: ['Shipments'],
+        summary: 'Создать отгрузку. Статус new, QR-код и автор задаются сервером',
+        security: [{ bearerAuth: [] }],
+        requestBody: shipmentBody,
+        responses: {
+          201: { description: 'Создана' },
+          400: { description: 'Ошибка валидации' },
+          401: { description: 'Нет токена' },
+          409: { description: 'Номер заказа занят' },
+        },
+      },
+    },
+    '/shipments/stats': {
+      get: {
+        tags: ['Shipments'],
+        summary: 'Статистика: по статусам, на сегодня, просроченные, места и вес',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'total, byStatus, plannedToday, overdue, packages, weightKg' },
+          401: { description: 'Нет токена' },
+        },
+      },
+    },
+    '/shipments/scan/{code}': {
+      get: {
+        tags: ['Shipments'],
+        summary: 'Найти отгрузку по отсканированному QR-коду',
+        security: [{ bearerAuth: [] }],
+        parameters: [{
+          in: 'path',
+          name: 'code',
+          required: true,
+          schema: { type: 'string', pattern: '^SHP-[0-9A-Fa-f]{16}$' },
+        }],
+        responses: {
+          200: { description: 'Отгрузка' },
+          400: { description: 'Неверный формат кода' },
+          404: { description: 'Не найдена' },
+        },
+      },
+    },
+    '/shipments/{id}': {
+      get: {
+        tags: ['Shipments'],
+        summary: 'Карточка отгрузки',
+        security: [{ bearerAuth: [] }],
+        parameters: [idParam],
+        responses: {
+          200: { description: 'Отгрузка' },
+          400: { description: 'id не UUID' },
+          404: { description: 'Не найдена' },
+        },
+      },
+      put: {
+        tags: ['Shipments'],
+        summary: 'Полная замена карточки. Автор, moderator или admin, пока груз на складе',
+        security: [{ bearerAuth: [] }],
+        parameters: [idParam],
+        requestBody: shipmentBody,
+        responses: {
+          200: { description: 'Обновлена' },
+          400: { description: 'Ошибка валидации или неполное тело' },
+          401: { description: 'Нет токена' },
+          403: { description: 'Не автор и не администратор' },
+          404: { description: 'Не найдена' },
+          409: { description: 'Номер заказа занят или отгрузка уже отправлена' },
+        },
+      },
+      delete: {
+        tags: ['Shipments'],
+        summary: 'Удалить отгрузку. Только admin, пишется в аудит',
+        security: [{ bearerAuth: [] }],
+        parameters: [idParam],
+        responses: { 200: { description: 'Удалена' }, 403: { description: 'Недостаточно прав' } },
+      },
+    },
+    '/shipments/{id}/status': {
+      patch: {
+        tags: ['Shipments'],
+        summary: 'Сменить статус: new → picking → packed → shipped → delivered, отмена до отгрузки',
+        security: [{ bearerAuth: [] }],
+        parameters: [idParam],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['status'],
+                properties: { status: { type: 'string', enum: SHIPMENT_STATUSES } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Статус изменён' },
+          400: { description: 'Неизвестный статус' },
+          409: { description: 'Недопустимый переход, в details from, to, allowed' },
+        },
+      },
+    },
+    '/shipments/{id}/qr': {
+      get: {
+        tags: ['Shipments'],
+        summary: 'QR-код отгрузки для этикетки',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          idParam,
+          { in: 'query', name: 'format', schema: { type: 'string', enum: ['png', 'svg'], default: 'png' } },
+        ],
+        responses: {
+          200: {
+            description: 'Изображение QR-кода со значением qrCode',
+            content: {
+              'image/png': { schema: { type: 'string', format: 'binary' } },
+              'image/svg+xml': { schema: { type: 'string' } },
+            },
+          },
+          404: { description: 'Не найдена' },
+        },
       },
     },
     '/products': {
