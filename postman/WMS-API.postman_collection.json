@@ -557,7 +557,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"sku\": \"MILK-01\",\n  \"name\": \"<script>alert(1)</script>Молоко\",\n  \"unit\": \"pcs\",\n  \"createdBy\": \"00000000-0000-0000-0000-000000000000\"\n}"
+              "raw": "{\n  \"sku\": \"MILK-01\",\n  \"name\": \"<script>alert(1)</script>Молоко\",\n  \"category\": \"food\",\n  \"unit\": \"pcs\",\n  \"price\": 2.49,\n  \"createdBy\": \"00000000-0000-0000-0000-000000000000\"\n}"
             },
             "url": "{{baseUrl}}/products"
           },
@@ -577,7 +577,7 @@
           ]
         },
         {
-          "name": "PATCH /products кладовщиком — 403",
+          "name": "PATCH /products автором-кладовщиком — 200",
           "request": {
             "auth": {
               "type": "bearer",
@@ -598,7 +598,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Чужая правка\"\n}"
+              "raw": "{\n  \"name\": \"Молоко 2,5%\"\n}"
             },
             "url": "{{baseUrl}}/products/{{productId}}"
           },
@@ -608,7 +608,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('403', () => pm.response.to.have.status(403));"
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('автор меняет свой товар', () => pm.expect(pm.response.json().data.name).to.eql('Молоко 2,5%'));"
                 ]
               }
             }
