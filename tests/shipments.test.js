@@ -153,6 +153,9 @@ describe('валидация отгрузок', () => {
     expect(messages.packagesCount).toBe('Количество мест не меньше 1');
     expect(messages.totalWeightKg).toBe('Вес не может быть отрицательным');
 
+    const blankDate = await createShipment({ ...order, plannedDate: '' });
+    expect(blankDate.body.error.details).toEqual([{ field: 'plannedDate', message: 'Плановая дата обязательна' }]);
+
     const noDate = await createShipment({ ...order, plannedDate: '2026-02-30' });
     expect(noDate.status).toBe(400);
     expect(noDate.body.error.details[0].message).toBe('Такой даты не существует');

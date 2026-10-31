@@ -14,6 +14,7 @@ const dateOnly = Joi.string().pattern(DATE_PATTERN).custom((value, helpers) => (
   isRealDate(value) ? value : helpers.error('date.invalid')
 )).messages({
   'string.pattern.base': 'Дата в формате ГГГГ-ММ-ДД',
+  'string.empty': 'Дата не может быть пустой',
   'date.invalid': 'Такой даты не существует',
 });
 
@@ -21,6 +22,7 @@ const plannedDate = dateOnly.custom((value, helpers) => (
   value < today() ? helpers.error('date.past') : value
 )).messages({
   'date.past': 'Плановая дата отгрузки не может быть в прошлом',
+  'string.empty': 'Плановая дата обязательна',
   'any.required': 'Плановая дата обязательна',
 });
 
