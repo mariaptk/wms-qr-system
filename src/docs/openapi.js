@@ -1,44 +1,9 @@
-const {
-  PRODUCT_CATEGORIES,
-  PRODUCT_UNITS,
-  PRODUCT_SORT_FIELDS,
-} = require('../constants/products');
-
-const idParam = { in: 'path', name: 'id', required: true, schema: { type: 'string', format: 'uuid' } };
-
-const productProperties = {
-  sku: {
-    type: 'string',
-    pattern: '^[A-Za-z0-9][A-Za-z0-9-]{1,63}$',
-    example: 'MILK-001',
-    description: 'Уникален, хранится в верхнем регистре',
-  },
-  name: { type: 'string', maxLength: 200, example: 'Молоко 3,2%' },
-  category: { type: 'string', enum: PRODUCT_CATEGORIES, example: 'food' },
-  unit: { type: 'string', enum: PRODUCT_UNITS, default: 'pcs' },
-  price: { type: 'number', minimum: 0, maximum: 10000000, example: 2.49 },
-  weightKg: { type: 'number', nullable: true, minimum: 0, maximum: 100000, example: 1.03 },
-  description: { type: 'string', maxLength: 2000 },
-  isActive: { type: 'boolean', default: true },
-};
-
-function productBody(full = true) {
-  return {
-    required: true,
-    content: {
-      'application/json': {
-        schema: { $ref: `#/components/schemas/${full ? 'ProductInput' : 'ProductPatch'}` },
-      },
-    },
-  };
-}
-
 const openapi = {
   openapi: '3.0.3',
   info: {
     title: 'WMS API',
-    version: '0.2.0',
-    description: 'REST API склада: аутентификация JWT, роли, каталог товаров с фильтрами и статистикой, ячейки.',
+    version: '0.1.0',
+    description: 'Безопасный REST API склада: аутентификация, роли, товары и ячейки.',
   },
   servers: [{ url: 'http://localhost:3000' }],
   tags: [
@@ -53,30 +18,6 @@ const openapi = {
       bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
     },
     schemas: {
-      ProductInput: {
-        type: 'object',
-        required: ['sku', 'name', 'category', 'price'],
-        properties: productProperties,
-      },
-      ProductPatch: {
-        type: 'object',
-        minProperties: 1,
-        properties: productProperties,
-      },
-      Product: {
-        allOf: [
-          { $ref: '#/components/schemas/ProductInput' },
-          {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              createdBy: { type: 'string', format: 'uuid' },
-              createdAt: { type: 'string', format: 'date-time' },
-              updatedAt: { type: 'string', format: 'date-time' },
-            },
-          },
-        ],
-      },
       Error: {
         type: 'object',
         properties: {
@@ -260,103 +201,40 @@ const openapi = {
     '/products': {
       get: {
         tags: ['Products'],
-        summary: 'Каталог товаров с фильтрами, поиском и сортировкой. Публичный',
+        summary: 'Каталог товаров. Публичный',
         parameters: [
-          { in: 'query', name: 'page', schema: { type: 'integer', minimum: 1, default: 1 } },
-          { in: 'query', name: 'limit', schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 } },
-          { in: 'query', name: 'search', description: 'Подстрока в названии или артикуле', schema: { type: 'string' } },
-          { in: 'query', name: 'category', schema: { type: 'string', enum: PRODUCT_CATEGORIES } },
-          { in: 'query', name: 'isActive', schema: { type: 'boolean' } },
-          { in: 'query', name: 'minPrice', schema: { type: 'number', minimum: 0 } },
-          { in: 'query', name: 'maxPrice', description: 'Не меньше minPrice', schema: { type: 'number', minimum: 0 } },
-          { in: 'query', name: 'sort', schema: { type: 'string', enum: PRODUCT_SORT_FIELDS, default: 'createdAt' } },
-          { in: 'query', name: 'order', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } },
+          { in: 'query', name: 'page', schema: { type: 'integer' } },
+          { in: 'query', name: 'limit', schema: { type: 'integer' } },
+          { in: 'query', name: 'search', schema: { type: 'string' } },
         ],
-        responses: {
-          200: {
-            description: 'Страница товаров и meta: page, limit, total, pages, sort, order',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    data: { type: 'array', items: { $ref: '#/components/schemas/Product' } },
-                    meta: { type: 'object' },
-                  },
-                },
-              },
-            },
-          },
-          400: { description: 'Неверный параметр фильтра или сортировки' },
-        },
+        responses: { 200: { description: 'Список' } },
       },
       post: {
         tags: ['Products'],
-        summary: 'Создать товар. Любая вошедшая роль, автор записывается в createdBy',
+        summary: 'Создать товар. Любая вошедшая роль',
         security: [{ bearerAuth: [] }],
-        requestBody: productBody(),
-        responses: {
-          201: { description: 'Создан' },
-          400: { description: 'Ошибка валидации' },
-          401: { description: 'Нет токена' },
-          409: { description: 'Артикул занят' },
-        },
-      },
-    },
-    '/products/stats': {
-      get: {
-        tags: ['Products'],
-        summary: 'Статистика каталога: количество, активные, цены по категориям',
-        security: [{ bearerAuth: [] }],
-        responses: {
-          200: { description: 'total, active, inactive, avgPrice, byCategory[]' },
-          401: { description: 'Нет токена' },
-        },
+        responses: { 201: { description: 'Создан' }, 401: { description: 'Нет токена' } },
       },
     },
     '/products/{id}': {
       get: {
         tags: ['Products'],
         summary: 'Карточка товара. Публичная',
-        parameters: [idParam],
-        responses: {
-          200: { description: 'Товар' },
-          400: { description: 'id не UUID' },
-          404: { description: 'Не найден' },
-        },
-      },
-      put: {
-        tags: ['Products'],
-        summary: 'Полная замена товара. Автор, moderator или admin',
-        security: [{ bearerAuth: [] }],
-        parameters: [idParam],
-        requestBody: productBody(),
-        responses: {
-          200: { description: 'Обновлён' },
-          400: { description: 'Ошибка валидации или неполное тело' },
-          401: { description: 'Нет токена' },
-          403: { description: 'Не автор и не администратор' },
-          404: { description: 'Не найден' },
-          409: { description: 'Артикул занят' },
-        },
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: 'Товар' }, 404: { description: 'Не найден' } },
       },
       patch: {
         tags: ['Products'],
-        summary: 'Частичное изменение товара. Автор, moderator или admin',
+        summary: 'Изменить товар. moderator и admin',
         security: [{ bearerAuth: [] }],
-        parameters: [idParam],
-        requestBody: productBody(false),
-        responses: {
-          200: { description: 'Обновлён' },
-          403: { description: 'Не автор и не администратор' },
-          409: { description: 'Артикул занят' },
-        },
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: 'Обновлён' }, 403: { description: 'Недостаточно прав' } },
       },
       delete: {
         tags: ['Products'],
         summary: 'Удалить товар. Только admin',
         security: [{ bearerAuth: [] }],
-        parameters: [idParam],
+        parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'string', format: 'uuid' } }],
         responses: { 200: { description: 'Удалён' }, 403: { description: 'Недостаточно прав' } },
       },
     },
