@@ -88,6 +88,127 @@ Bearer-токен. Отзывает все сессии.
 
 Чужой профиль для кладовщика — `403`, событие пишется в журнал безопасности.
 
+## Отгрузки
+
+Все маршруты требуют `Authorization: Bearer <accessToken>`: в отгрузках имена и адреса получателей.
+
+| Метод | Путь | Кто |
+|---|---|---|
+| GET | /shipments | любая вошедшая роль |
+| GET | /shipments/stats | любая вошедшая роль |
+| GET | /shipments/scan/:code | любая вошедшая роль |
+| GET | /shipments/:id | любая вошедшая роль |
+| GET | /shipments/:id/qr | любая вошедшая роль |
+| POST | /shipments | любая вошедшая роль |
+| PUT | /shipments/:id | автор отгрузки, moderator, admin |
+| PATCH | /shipments/:id/status | любая вошедшая роль |
+| DELETE | /shipments/:id | admin |
+
+### Поля отгрузки
+
+| Поле | Тип | Правила |
+|---|---|---|
+| `id` | UUID | создаётся сервером |
+| `orderNumber` | строка до 32 | обязательное, уникальное, латиница, цифры и дефис, хранится в верхнем регистре |
+| `qrCode` | строка | выдаёт сервер: `SHP-` и 16 шестнадцатеричных символов, уникальное, с клиента не принимается |
+| `customerName` | строка 2–200 | обязательное |
+| `deliveryAddress` | строка 5–500 | обязательное |
+| `plannedDate` | дата `ГГГГ-ММ-ДД` | обязательное, не раньше сегодняшнего дня |
+| `status` | строка | `new` при создании, дальше только через `PATCH /shipments/:id/status` |
+| `packagesCount` | целое | от 1 до 1000, по умолчанию 1 |
+| `totalWeightKg` | число, 3 знака | необязательное, от 0 до 50 000 |
+| `carrier` | строка до 100 | необязательное |
+| `comment` | строка до 2000 | необязательное |
+| `shippedAt` | дата и время | ставится сервером при переходе в `shipped` |
+| `createdBy` | UUID | автор, сервер берёт из токена |
+
+HTML в строковых полях удаляется.
+
+### POST /shipments
+
+```json
+{
+  "orderNumber": "ORD-1001",
+  "customerName": "ООО «Гиппо»",
+  "deliveryAddress": "г. Минск, ул. Притыцкого, 156",
+  "plannedDate": "2026-11-02",
+  "packagesCount": 3,
+  "totalWeightKg": 42.5,
+  "carrier": "Белпочта"
+}
+```
+
+`201` — созданная отгрузка со статусом `new` и `qrCode`. `409` — номер заказа уже занят (без учёта регистра):
+
+```json
+{ "error": { "message": "Отгрузка с таким номером заказа уже существует", "details": [{ "field": "orderNumber", "message": "Номер заказа занят" }] } }
+```
+
+### PUT /shipments/:id
+
+Заменяет карточку целиком: тело содержит те же обязательные поля, что при создании, иначе `400`. Кладовщик меняет только свою отгрузку, чужую — `403`. После перехода в `shipped`, `delivered` или `cancelled` карточка не меняется — `409`.
+
+### PATCH /shipments/:id/status
+
+Тело `{ "status": "picking" }`. Переходы:
+
+| Из | Можно в |
+|---|---|
+| `new` | `picking`, `cancelled` |
+| `picking` | `packed`, `cancelled` |
+| `packed` | `shipped`, `cancelled` |
+| `shipped` | `delivered` |
+| `delivered`, `cancelled` | — |
+
+Недопустимый переход — `409`:
+
+```json
+{ "error": { "message": "Нельзя перевести отгрузку из статуса new в shipped", "details": { "from": "new", "to": "shipped", "allowed": ["picking", "cancelled"] } } }
+```
+
+### QR-код
+
+`GET /shipments/:id/qr` возвращает изображение QR-кода со значением `qrCode` для этикетки: PNG по умолчанию, `?format=svg` — SVG. Терминал кладовщика сканирует этикетку и запрашивает `GET /shipments/scan/SHP-5970B8CD152DA8F6`; код без учёта регистра, неверный формат — `400`, неизвестный код — `404`.
+
+### GET /shipments
+
+| Параметр | Значение |
+|---|---|
+| `page`, `limit` | страница и размер, `limit` до 100 |
+| `search` | подстрока в номере заказа, получателе или адресе, без учёта регистра |
+| `status` | один из статусов |
+| `plannedFrom`, `plannedTo` | диапазон плановой даты, `plannedTo` не раньше `plannedFrom` |
+| `sort` | `plannedDate` (по умолчанию), `createdAt`, `orderNumber`, `customerName`, `packagesCount`, `totalWeightKg` |
+| `order` | `asc` (по умолчанию) или `desc` |
+
+Пример: `GET /shipments?status=new&plannedFrom=2026-11-01&plannedTo=2026-11-07&sort=plannedDate`.
+
+```json
+{
+  "data": [{ "id": "…", "orderNumber": "ORD-1001", "status": "new", "plannedDate": "2026-11-02", "qrCode": "SHP-5970B8CD152DA8F6" }],
+  "meta": { "page": 1, "limit": 20, "total": 1, "pages": 1, "sort": "plannedDate", "order": "asc" }
+}
+```
+
+Поле сортировки не из списка, например `sort=passwordHash`, — `400`.
+
+### GET /shipments/stats
+
+```json
+{
+  "data": {
+    "total": 5,
+    "byStatus": { "new": 3, "picking": 1, "packed": 0, "shipped": 0, "delivered": 0, "cancelled": 1 },
+    "plannedToday": 1,
+    "overdue": 1,
+    "packages": 8,
+    "weightKg": 95
+  }
+}
+```
+
+`plannedToday` и `overdue` — незакрытые отгрузки (`new`, `picking`, `packed`) на сегодня и с прошедшей плановой датой. `packages` и `weightKg` считаются без отменённых.
+
 ## Товары
 
 | Метод | Путь | Кто |
