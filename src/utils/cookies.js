@@ -17,9 +17,11 @@ function setAuthCookies(res, refreshToken, csrfToken) {
   });
 }
 
+// Атрибуты должны совпадать с установкой: иначе при SameSite=None браузер не примет удаление cookie.
 function clearAuthCookies(res) {
-  res.clearCookie('refreshToken', { path: '/auth' });
-  res.clearCookie('csrf_token', { path: '/' });
+  const options = { secure: config.cookies.secure, sameSite: config.cookies.sameSite };
+  res.clearCookie('refreshToken', { ...options, httpOnly: true, path: '/auth' });
+  res.clearCookie('csrf_token', { ...options, path: '/' });
 }
 
 module.exports = { setAuthCookies, clearAuthCookies };

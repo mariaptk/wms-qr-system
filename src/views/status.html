@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WMS API — метрики</title>
+  <style>
+    :root { --bg:#f4f6fb; --card:#fff; --text:#1c2333; --muted:#6b7385; --ok:#1f9d55; --warn:#d97706; --bad:#dc2626; --accent:#2f5fe3; }
+    * { box-sizing: border-box; }
+    body { margin:0; font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:20px 28px; background:#17203a; color:#fff; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; }
+    header h1 { margin:0; font-size:20px; font-weight:600; }
+    header .meta { color:#b8c1d9; font-size:13px; }
+    main { padding:24px 28px; max-width:1200px; margin:0 auto; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+    .card { background:var(--card); border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(20,30,60,.08); }
+    .card h2 { margin:0 0 6px; font-size:13px; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+    .value { font-size:28px; font-weight:650; }
+    .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+    .wide { grid-column:1/-1; }
+    .badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:13px; font-weight:600; }
+    .ok { background:#dcfce7; color:var(--ok); } .bad { background:#fee2e2; color:var(--bad); } .off { background:#eef0f5; color:var(--muted); }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    td { padding:6px 0; border-bottom:1px solid #eef0f5; } td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+    svg { width:100%; height:160px; display:block; }
+    .legend { display:flex; gap:16px; color:var(--muted); font-size:13px; margin-top:6px; }
+    .dot { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:-1px; }
+    #error { color:var(--bad); margin-bottom:12px; display:none; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>WMS API — состояние сервера</h1>
+  <div class="meta" id="release">загрузка…</div>
+</header>
+<main>
+  <div id="error"></div>
+  <div class="grid">
+    <div class="card"><h2>Статус</h2><div class="value" id="status">—</div><div class="sub" id="db">база: —</div></div>
+    <div class="card"><h2>Время работы</h2><div class="value" id="uptime">—</div><div class="sub" id="started">—</div></div>
+    <div class="card"><h2>Память (RSS)</h2><div class="value" id="rss">—</div><div class="sub" id="heap">—</div></div>
+    <div class="card"><h2>CPU процесса</h2><div class="value" id="cpu">—</div><div class="sub" id="load">—</div></div>
+    <div class="card"><h2>Запросов всего</h2><div class="value" id="total">—</div><div class="sub" id="classes">—</div></div>
+    <div class="card"><h2>Время ответа</h2><div class="value" id="avg">—</div><div class="sub" id="p95">—</div></div>
+    <div class="card wide">
+      <h2>Запросы за последний час (по минутам)</h2>
+      <svg id="chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+      <div class="legend"><span><span class="dot" style="background:var(--accent)"></span>запросы</span><span><span class="dot" style="background:var(--bad)"></span>ошибки 5xx</span></div>
+    </div>
+    <div class="card"><h2>Популярные маршруты</h2><table id="routes"></table></div>
+    <div class="card"><h2>Методы</h2><table id="methods"></table></div>
+    <div class="card"><h2>Интеграции</h2><table id="integrations"></table></div>
+  </div>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (value) => String(value).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function duration(seconds) {
+    const d = Math.floor(seconds / 86400), h = Math.floor(seconds % 86400 / 3600), m = Math.floor(seconds % 3600 / 60);
+    if (d) return d + ' д ' + h + ' ч';
+    if (h) return h + ' ч ' + m + ' мин';
+    return m + ' мин ' + (seconds % 60) + ' с';
+  }
+
+  function rows(table, entries) {
+    $(table).innerHTML = entries.length
+      ? entries.map(([k, v]) => '<tr><td>' + esc(k) + '</td><td>' + v + '</td></tr>').join('')
+      : '<tr><td>нет данных</td><td></td></tr>';
+  }
+
+  function chart(history) {
+    const svg = $('chart');
+    if (!history.length) { svg.innerHTML = ''; return; }
+    const max = Math.max(1, ...history.map((b) => b.requests));
+    const w = 600 / 60;
+    svg.innerHTML = history.map((b, i) => {
+      const x = (60 - history.length + i) * w;
+      const h = (b.requests / max) * 150;
+      const e = (b.errors / max) * 150;
+      return '<rect x="' + (x + 1) + '" y="' + (160 - h) + '" width="' + (w - 2) + '" height="' + h + '" fill="#2f5fe3" opacity=".8"><title>' + esc(b.minute.slice(11, 16)) + ' UTC: ' + b.requests + ' запр., ' + b.avgMs + ' мс</title></rect>'
+        + (b.errors ? '<rect x="' + (x + 1) + '" y="' + (160 - e) + '" width="' + (w - 2) + '" height="' + e + '" fill="#dc2626"></rect>' : '');
+    }).join('');
+  }
+
+  const badge = (ok, on, off) => '<span class="badge ' + (ok ? 'ok' : 'off') + '">' + (ok ? on : off) + '</span>';
+
+  async function refresh() {
+    try {
+      const response = await fetch('/metrics', { cache: 'no-store' });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const m = (await response.json()).data;
+      $('error').style.display = 'none';
+      $('release').textContent = 'версия ' + m.release.version + ' · коммит ' + m.release.commit.slice(0, 7) + ' · ' + m.release.env + ' · обновлено ' + new Date().toLocaleTimeString('ru-RU');
+      const dbOk = m.db.status === 'ok';
+      $('status').innerHTML = '<span class="badge ' + (dbOk ? 'ok' : 'bad') + '">' + (dbOk ? 'работает' : 'проблема с БД') + '</span>';
+      $('db').textContent = 'база: ' + (dbOk ? 'доступна, ' + m.db.latencyMs + ' мс' : 'недоступна');
+      $('uptime').textContent = duration(m.uptimeSeconds);
+      $('started').textContent = 'запущен ' + new Date(m.startedAt).toLocaleString('ru-RU');
+      $('rss').textContent = m.memoryMb.rss + ' МБ';
+      $('heap').textContent = 'heap ' + m.memoryMb.heapUsed + ' / ' + m.memoryMb.heapTotal + ' МБ';
+      $('cpu').textContent = m.cpu.processPercent + ' %';
+      $('load').textContent = 'load avg ' + m.cpu.loadAverage.join(' / ') + ' · ядер ' + m.cpu.cores;
+      $('total').textContent = m.requests.total;
+      const c = m.requests.byStatusClass;
+      $('classes').textContent = '2xx ' + c['2xx'] + ' · 4xx ' + c['4xx'] + ' · 5xx ' + c['5xx'] + ' · в работе ' + m.requests.inFlight;
+      $('avg').textContent = m.responseTimeMs.avg + ' мс';
+      $('p95').textContent = 'p95 ' + m.responseTimeMs.p95 + ' мс · max ' + m.responseTimeMs.max + ' мс';
+      chart(m.history);
+      rows('routes', m.requests.topRoutes.map((r) => [r.route, r.count]));
+      rows('methods', Object.entries(m.requests.byMethod));
+      rows('integrations', [
+        ['Sentry (ошибки)', badge(m.integrations.sentry, 'подключён', 'выключен')],
+        ['Better Stack (логи)', badge(m.integrations.betterStack, 'подключён', 'выключен')],
+        ['Telegram (уведомления)', badge(m.integrations.telegram, 'подключён', 'выключен')],
+      ]);
+    } catch (err) {
+      $('error').style.display = 'block';
+      $('error').textContent = 'Не удалось получить метрики: ' + err.message;
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>

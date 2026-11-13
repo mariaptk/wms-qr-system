@@ -7,6 +7,8 @@ const swaggerUi = require('swagger-ui-express');
 const config = require('./config/env');
 const openapi = require('./docs/openapi');
 const routes = require('./routes');
+const monitoringRoutes = require('./routes/monitoring');
+const { requestLog } = require('./middleware/requestLog');
 const { globalLimiter } = require('./middleware/rateLimiters');
 const {
   requestId,
@@ -43,6 +45,7 @@ app.use(helmet({
 }));
 
 app.use(requestId);
+app.use(requestLog);
 app.use(enforceCorsWhitelist);
 app.use(cors({
   origin(origin, callback) {
@@ -59,10 +62,19 @@ app.use(express.json({ limit: config.bodyLimit }));
 app.use(sanitizeBody);
 app.use(hpp());
 app.use(rejectSqlInjection);
+app.use(monitoringRoutes);
 app.use(globalLimiter);
 
-app.get('/health', (_req, res) => {
-  res.json({ data: { status: 'ok' } });
+app.get('/', (_req, res) => {
+  res.json({
+    data: {
+      name: 'WMS API',
+      docs: '/api-docs',
+      health: '/health',
+      metrics: '/metrics',
+      status: '/status',
+    },
+  });
 });
 
 app.get('/api-docs.json', (_req, res) => {

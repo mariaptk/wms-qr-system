@@ -1,4 +1,5 @@
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
+const packageJson = require('../../package.json');
 
 function readInt(name, fallback) {
   const raw = process.env[name];
@@ -35,6 +36,12 @@ const databaseUrl = isTest
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL обязателен');
+}
+
+// Фронтенд на Vercel и API на Render — разные сайты: refresh-cookie дойдёт до API только с SameSite=None.
+const cookieSameSite = (process.env.COOKIE_SAMESITE || 'strict').toLowerCase();
+if (!['strict', 'lax', 'none'].includes(cookieSameSite)) {
+  throw new Error('COOKIE_SAMESITE: strict, lax или none');
 }
 
 module.exports = {
@@ -74,8 +81,27 @@ module.exports = {
   },
   bodyLimit: process.env.BODY_LIMIT || '100kb',
   cookies: {
-    secure: isProd,
-    sameSite: 'strict',
+    secure: isProd || cookieSameSite === 'none',
+    sameSite: cookieSameSite,
+  },
+  release: {
+    version: packageJson.version,
+    // Render подставляет хеш собранного коммита сам, локально его нет.
+    commit: process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || 'local',
+  },
+  sentry: {
+    dsn: isTest ? '' : (process.env.SENTRY_DSN || ''),
+    environment: process.env.SENTRY_ENVIRONMENT || env,
+    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE || 0),
+  },
+  betterStack: {
+    sourceToken: isTest ? '' : (process.env.BETTER_STACK_SOURCE_TOKEN || ''),
+    ingestingHost: process.env.BETTER_STACK_INGESTING_HOST || '',
+  },
+  telegram: {
+    botToken: isTest ? '' : (process.env.TELEGRAM_BOT_TOKEN || ''),
+    chatId: process.env.TELEGRAM_CHAT_ID || '',
+    alertIntervalMs: readInt('TELEGRAM_ALERT_INTERVAL_MS', 60 * 1000),
   },
   admin: {
     email: process.env.ADMIN_EMAIL || 'admin@example.com',
