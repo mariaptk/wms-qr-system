@@ -199,6 +199,8 @@ Settings → Secrets and variables → Actions:
 
 Интеграции включаются переменными окружения на Render: `SENTRY_DSN`, `BETTER_STACK_SOURCE_TOKEN` и `BETTER_STACK_INGESTING_HOST`, `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`, `HEALTHCHECKS_PING_URL`. Без них сервер работает как раньше, только с файловыми логами. Подключённые интеграции видны на странице `/status` и в разделе «Мониторинг» фронтенда.
 
+Проверка базы в `/health`, `/metrics` и heartbeat кешируется на 15 минут (`HEALTH_DB_CACHE_MS`). Neon на бесплатном тарифе даёт 100 вычислительных часов в месяц и засыпает после 5 минут без запросов; без кеша запросы раз в несколько минут держали бы базу включённой круглосуточно (около 186 часов в месяц), и Neon приостановил бы её до конца месяца.
+
 Пароли, токены, cookie и заголовок `Authorization` маскируются (`[скрыто]`) перед записью в логи, Sentry и Telegram ([`src/utils/redact.js`](src/utils/redact.js)).
 
 Проверка Sentry: войдите администратором → «Мониторинг» → «Ошибка на сервере» (вызывает `POST /monitoring/test-error`) или «Ошибка во фронтенде».
@@ -247,7 +249,7 @@ Access-токен живёт 15 минут и передаётся в загол
 | Команда | Где | Что делает |
 |---|---|---|
 | `npm run dev` / `npm start` | корень | бэкенд с автоперезапуском / без |
-| `npm test` | корень | 45 тестов Jest и Supertest на базе `wms_test` |
+| `npm test` | корень | 47 тестов Jest и Supertest на базе `wms_test` |
 | `npm run lint` | корень | ESLint бэкенда |
 | `npm run dev` | `frontend` | фронтенд на <http://localhost:5173> |
 | `npm run build` | `frontend` | сборка в `frontend/dist` |

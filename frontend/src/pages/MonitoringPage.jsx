@@ -98,7 +98,7 @@ export default function MonitoringPage() {
           <div className="kpis">
             <div className={`kpi ${m.db.status === 'ok' ? 'kpi-ok' : 'kpi-bad'}`}>
               <span>Статус</span><strong>{m.db.status === 'ok' ? 'работает' : 'сбой БД'}</strong>
-              <em>база {m.db.latencyMs} мс</em>
+              <em>база {m.db.latencyMs} мс · проверка {new Date(m.db.checkedAt).toLocaleTimeString('ru-RU')}</em>
             </div>
             <div className="kpi"><span>Время работы</span><strong>{duration(m.uptimeSeconds)}</strong></div>
             <div className="kpi"><span>Память RSS</span><strong>{m.memoryMb.rss} МБ</strong><em>heap {m.memoryMb.heapUsed} / {m.memoryMb.heapTotal} МБ</em></div>

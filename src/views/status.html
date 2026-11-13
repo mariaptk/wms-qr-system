@@ -94,7 +94,7 @@
       $('release').textContent = 'версия ' + m.release.version + ' · коммит ' + m.release.commit.slice(0, 7) + ' · ' + m.release.env + ' · обновлено ' + new Date().toLocaleTimeString('ru-RU');
       const dbOk = m.db.status === 'ok';
       $('status').innerHTML = '<span class="badge ' + (dbOk ? 'ok' : 'bad') + '">' + (dbOk ? 'работает' : 'проблема с БД') + '</span>';
-      $('db').textContent = 'база: ' + (dbOk ? 'доступна, ' + m.db.latencyMs + ' мс' : 'недоступна');
+      $('db').textContent = 'база: ' + (dbOk ? 'доступна, ' + m.db.latencyMs + ' мс' : 'недоступна') + (m.db.checkedAt ? ' · проверка ' + new Date(m.db.checkedAt).toLocaleTimeString('ru-RU') : '');
       $('uptime').textContent = duration(m.uptimeSeconds);
       $('started').textContent = 'запущен ' + new Date(m.startedAt).toLocaleString('ru-RU');
       $('rss').textContent = m.memoryMb.rss + ' МБ';

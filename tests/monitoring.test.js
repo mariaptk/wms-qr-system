@@ -60,6 +60,34 @@ describe('GET /metrics', () => {
   });
 });
 
+describe('кеш проверки базы', () => {
+  const config = require('../src/config/env');
+  const { checkDatabase } = require('../src/services/health');
+
+  afterEach(() => {
+    config.healthDbCacheMs = 0;
+  });
+
+  test('повторная проверка в пределах HEALTH_DB_CACHE_MS не обращается к базе', async () => {
+    config.healthDbCacheMs = 60000;
+    const first = await checkDatabase();
+    const spy = jest.spyOn(sequelize, 'query');
+    const second = await checkDatabase();
+    expect(first).toMatchObject({ status: 'ok' });
+    expect(second).toMatchObject({ status: 'ok', cached: true, checkedAt: first.checkedAt });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  test('без кеша каждая проверка идёт в базу', async () => {
+    const spy = jest.spyOn(sequelize, 'query');
+    await checkDatabase();
+    await checkDatabase();
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+});
+
 describe('GET /status', () => {
   test('HTML-страница метрик', async () => {
     const res = await request(app).get('/status');

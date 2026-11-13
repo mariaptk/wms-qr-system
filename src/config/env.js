@@ -98,6 +98,7 @@ module.exports = {
     sourceToken: isTest ? '' : (process.env.BETTER_STACK_SOURCE_TOKEN || ''),
     ingestingHost: process.env.BETTER_STACK_INGESTING_HOST || '',
   },
+  healthDbCacheMs: readInt('HEALTH_DB_CACHE_MS', isProd ? 15 * 60 * 1000 : 0),
   healthchecks: {
     pingUrl: isTest ? '' : (process.env.HEALTHCHECKS_PING_URL || '').replace(/\/+$/, ''),
     intervalMs: readInt('HEALTHCHECKS_INTERVAL_MS', 60 * 1000),

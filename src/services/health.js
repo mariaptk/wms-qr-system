@@ -1,6 +1,10 @@
 const { sequelize } = require('../config/database');
+const config = require('../config/env');
 
-async function checkDatabase(timeoutMs = 3000) {
+let cached = null;
+let pending = null;
+
+async function queryDatabase(timeoutMs) {
   const started = Date.now();
   let timer;
   try {
@@ -16,6 +20,27 @@ async function checkDatabase(timeoutMs = 3000) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Проверка базы с кешем. Neon на бесплатном тарифе засыпает после 5 минут без запросов и даёт
+ * 100 вычислительных часов в месяц: проверка при каждом обращении UptimeRobot и heartbeat
+ * не дала бы базе уснуть и исчерпала бы лимит. Неудачная проверка не кешируется.
+ */
+async function checkDatabase({ timeoutMs = 3000 } = {}) {
+  const maxAge = config.healthDbCacheMs;
+  if (cached && cached.status === 'ok' && Date.now() - cached.checkedAt < maxAge) {
+    return { ...cached.result, cached: true };
+  }
+  if (!pending) {
+    pending = queryDatabase(timeoutMs).then((result) => {
+      cached = { status: result.status, result: { ...result, checkedAt: new Date().toISOString() }, checkedAt: Date.now() };
+      return cached.result;
+    }).finally(() => {
+      pending = null;
+    });
+  }
+  return { ...(await pending), cached: false };
 }
 
 module.exports = { checkDatabase };
