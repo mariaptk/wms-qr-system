@@ -6,6 +6,7 @@ const { syncSchema } = require('./config/schema');
 const { logger, flushLogs } = require('./utils/logger');
 const { warmDummyHash } = require('./services/authService');
 const { notify } = require('./services/telegram');
+const { startHeartbeat, stopHeartbeat } = require('./services/heartbeat');
 
 const releaseLabel = `${config.release.version} (${config.release.commit.slice(0, 7)})`;
 
@@ -26,10 +27,12 @@ async function start() {
       version: config.release.version,
     });
     if (config.isProd) notify(`[СТАРТ] WMS API ${releaseLabel} запущен (${config.env})`);
+    startHeartbeat();
   });
 
   async function shutdown(signal) {
     logger.info({ message: 'Сервер останавливается', signal });
+    stopHeartbeat();
     server.close();
     await sequelize.close();
     await flushAll();

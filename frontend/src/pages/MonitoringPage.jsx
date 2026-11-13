@@ -121,6 +121,7 @@ export default function MonitoringPage() {
                 <dt>Sentry React</dt><dd>{sentryEnabled ? 'подключён' : 'выключен'}</dd>
                 <dt>Better Stack</dt><dd>{m.integrations.betterStack ? 'подключён' : 'выключен'}</dd>
                 <dt>Telegram</dt><dd>{m.integrations.telegram ? 'подключён' : 'выключен'}</dd>
+                <dt>Healthchecks.io</dt><dd>{m.integrations.healthchecks ? 'подключён' : 'выключен'}</dd>
               </dl>
             </section>
           </div>

@@ -1,38 +1,67 @@
-# WMS — система управления складом и отгрузкой товаров
+# WMS — система управления складом и отгрузкой товаров с QR-кодами
 
-Серверная часть системы складского учёта. В текущей версии реализован безопасный REST API: пользователи и роли, отгрузки с QR-кодами (статусы, поиск по отсканированному коду, фильтры и статистика), справочники товаров и ячеек хранения, журнал аудита.
+Курсовой проект по дисциплине «Интернет-технологии и веб-программирование». Система ведёт отгрузки со склада: кладовщик создаёт отгрузку, сервер выдаёт ей уникальный QR-код для этикетки, а на каждом этапе (сборка, упаковка, отгрузка, доставка) этикетку сканируют камерой телефона или ручным сканером.
 
-Стек: Node.js, Express 5, PostgreSQL 16, Sequelize 6, JWT, bcrypt, Joi, Helmet, qrcode, Winston, Jest.
-
-## Роли
-
-| Роль | Кто на складе | Права |
+| Часть | Технологии | Хостинг |
 |---|---|---|
-| `user` | кладовщик | отгрузки: создание, изменение своих, смена статуса, сканирование QR; просмотр справочников, создание товаров, свой профиль |
-| `moderator` | старший смены | права кладовщика, изменение любых отгрузок и товаров, создание и изменение ячеек |
-| `admin` | администратор | пользователи и роли, удаление отгрузок, товаров и ячеек, журнал аудита |
+| Бэкенд (REST API) | Node.js 22, Express 5, Sequelize 6, JWT, Joi, Helmet, qrcode, Winston | Render (free) |
+| Фронтенд | React 19, Vite 8, React Router 7, html5-qrcode | Vercel (Hobby) |
+| База данных | PostgreSQL 16 | Neon (free) |
+| CI/CD | GitHub Actions | — |
+| Мониторинг | UptimeRobot, Healthchecks.io, Sentry, Better Stack Logs, Telegram, `/metrics` и `/status` | — |
 
-При регистрации всегда назначается роль `user`, роль меняет только администратор.
+## Ссылки
 
-## Требования
+> Заполняются после деплоя: замените значения в угловых скобках на свои.
 
-- Node.js 18 или новее
-- PostgreSQL 16 (локально или в Docker)
+| Что | Ссылка |
+|---|---|
+| Приложение (фронтенд) | <https://ВАШ-ПРОЕКТ.vercel.app> |
+| API (бэкенд) | <https://ВАШ-СЕРВИС.onrender.com> |
+| Проверка доступности | <https://ВАШ-СЕРВИС.onrender.com/health> |
+| Дашборд метрик сервера | <https://ВАШ-СЕРВИС.onrender.com/status> |
+| Swagger | <https://ВАШ-СЕРВИС.onrender.com/api-docs> |
+| Статус-страница UptimeRobot | <https://stats.uptimerobot.com/ВАШ-ID> |
+| Heartbeat (Healthchecks.io) | <https://healthchecks.io/projects/ВАШ-ПРОЕКТ/checks/> |
+| Ошибки (Sentry) | <https://ВАША-ОРГАНИЗАЦИЯ.sentry.io/issues/> |
+| Логи (Better Stack) | <https://telemetry.betterstack.com/> → источник `wms-api` |
+| Сборки (GitHub Actions) | <https://github.com/mariaptk/wms-qr-system/actions> |
+| Уведомления (Telegram-бот) | <https://t.me/ИМЯ_ВАШЕГО_БОТА> |
 
-## Установка и запуск
+Контакт для уведомлений: Telegram-бот `@ИМЯ_ВАШЕГО_БОТА` присылает статус каждой сборки (GitHub Actions), старт сервера и ошибки 5xx (бэкенд). О падении сервера сообщает `@HealthchecksBot` в тот же чат.
 
-### 1. Зависимости
+Демо-учётные записи (создаются командой `npm run seed:demo`):
 
-```bash
-git clone https://github.com/mariaptk/wms-qr-system.git
-cd wms-qr-system
-git checkout kr21
-npm install
-```
+| Роль | Email | Пароль |
+|---|---|---|
+| Администратор | значение `ADMIN_EMAIL` | значение `ADMIN_PASSWORD` |
+| Старший смены (`moderator`) | `senior@example.com` | значение `DEMO_PASSWORD` (по умолчанию `Sklad2026!`) |
+| Кладовщик (`user`) | `ivanova@example.com`, `petrov@example.com` | то же |
 
-### 2. База данных
+## Работы по ветке
 
-Нужны две базы: `wms` для работы и `wms_test` для автотестов.
+| Ветка | Работа | Что добавлено |
+|---|---|---|
+| `ipr21` | ИПР1 «Безопасный REST API» | пользователи и роли, JWT и refresh-cookie, CSRF, блокировка входа, лимиты, аудит, товары и ячейки хранения |
+| `kr21` | КР1 «Серверная разработка» | отгрузки с QR-кодами: CRUD, статусы, поиск по QR, картинка для этикетки, фильтры, статистика, коллекция Postman |
+| `ipr22` | ИПР2 «Деплой и мониторинг» | фронтенд, CI/CD, деплой, `/health`, `/metrics`, `/status`, Sentry, Better Stack, Telegram, демо-данные |
+
+## Возможности
+
+- **Сводка**: отгрузки на сегодня, просроченные, распределение по статусам, количество мест и вес.
+- **Отгрузки**: список с поиском, фильтром по статусу и датам, сортировкой и страницами; создание и изменение с проверкой полей.
+- **Карточка отгрузки**: смена статуса по цепочке `new → picking → packed → shipped → delivered` (отмена — до отгрузки), этикетка с QR-кодом, печать и скачивание PNG.
+- **Сканер QR**: камера телефона (html5-qrcode) или ручной ввод; найденную отгрузку можно сразу перевести на следующий этап.
+- **Справочники**: товары и ячейки хранения.
+- **Мониторинг**: метрики бэкенда в реальном времени и кнопки тестовых ошибок для Sentry (только администратор).
+
+Права: кладовщик создаёт отгрузки, меняет свои и переводит любые по статусам; старший смены меняет любые; удаляет только администратор.
+
+## Локальный запуск
+
+Нужны Node.js 22 (не ниже 20.19) и PostgreSQL 16.
+
+### 1. База данных
 
 **Docker:**
 
@@ -41,7 +70,7 @@ docker compose up -d
 docker compose exec postgres psql -U wms -d wms -c "CREATE DATABASE wms_test OWNER wms;"
 ```
 
-**Установленный PostgreSQL** (pgAdmin → Query Tool или `psql -U postgres`), команды выполняются по одной:
+**Установленный PostgreSQL** (pgAdmin → Query Tool или `psql -U postgres`):
 
 ```sql
 CREATE ROLE wms LOGIN PASSWORD 'wms';
@@ -49,58 +78,139 @@ CREATE DATABASE wms OWNER wms;
 CREATE DATABASE wms_test OWNER wms;
 ```
 
-### 3. Переменные окружения
+### 2. Бэкенд
 
 ```bash
-cp .env.example .env        # Windows: copy .env.example .env
+git clone https://github.com/mariaptk/wms-qr-system.git
+cd wms-qr-system
+git checkout ipr22
+npm install
+cp .env.example .env          # Windows: copy .env.example .env
+npm run seed:demo             # таблицы, администратор и демо-данные
+npm run dev                   # http://localhost:3000
 ```
 
-В `.env` обязательно задаются:
-
-| Переменная | Значение |
-|---|---|
-| `DATABASE_URL` | `postgres://ЛОГИН:ПАРОЛЬ@127.0.0.1:5432/wms` |
-| `TEST_DATABASE_URL` | то же, база `wms_test` |
-| `JWT_SECRET`, `JWT_REFRESH_SECRET` | два разных случайных секрета, не короче 32 символов |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | учётная запись администратора, создаётся командой `npm run seed` |
-
-Секрет можно сгенерировать так:
+В `.env` обязательно задаются `DATABASE_URL`, `JWT_SECRET` и `JWT_REFRESH_SECRET` (два разных значения не короче 32 символов), `ADMIN_EMAIL` и `ADMIN_PASSWORD`. Секрет можно сгенерировать так:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Остальные параметры (лимиты запросов, размер тела, число сессий, белый список CORS) описаны в `.env.example`. Файл `.env` в репозиторий не попадает.
-
-### 4. Запуск
+### 3. Фронтенд
 
 ```bash
-npm run seed     # таблицы, новые столбцы и администратор
-npm run dev      # сервер с автоперезапуском
+cd frontend
+npm install
+cp .env.example .env.local    # Windows: copy .env.example .env.local
+npm run dev                   # http://localhost:5173
 ```
 
-- API: http://localhost:3000
-- Проверка: http://localhost:3000/health
-- Swagger UI: http://localhost:3000/api-docs
-- OpenAPI JSON: http://localhost:3000/api-docs.json
+Откройте <http://localhost:5173> и войдите администратором или демо-сотрудником.
 
-## Скрипты
+## Заполнение базы данных
 
 | Команда | Что делает |
 |---|---|
-| `npm run dev` | запуск через nodemon |
-| `npm start` | запуск без автоперезапуска |
-| `npm run seed` | создаёт недостающие таблицы и столбцы и администратора, данные не трогает |
-| `npm run db:reset` | пересоздаёт все таблицы и администратора |
-| `npm test` | тесты Jest и Supertest на базе `wms_test` |
-| `npm run lint` | ESLint |
+| `npm run seed` | создаёт недостающие таблицы и столбцы и администратора; данные не трогает |
+| `npm run seed:demo` | то же плюс демо-данные; повторный запуск ничего не дублирует |
+| `npm run db:reset` | **удаляет все данные**, пересоздаёт таблицы и администратора |
+| `npm run db:reset:demo` | то же плюс демо-данные |
+
+Демо-данные охватывают все три работы:
+
+| Таблица | Работа | Что создаётся |
+|---|---|---|
+| `users` | ИПР1 | администратор, старший смены и два кладовщика — все три роли |
+| `products` | ИПР1 | 10 товаров (молочная продукция, бакалея, упаковка), один снят с продажи |
+| `storage_locations` | ИПР1 | 10 ячеек в зонах приёмки, хранения, холодильной камеры, упаковки и отгрузки, одна заблокирована |
+| `shipments` | КР1 | 15 отгрузок во всех шести статусах с датами от «4 дня назад» до «через неделю», среди них просроченная |
+| `sessions`, `audit_logs` | ИПР1 | заполняются сами при входе и действиях администратора |
+
+Плановые даты считаются от дня запуска, поэтому для свежей картины на защите выполните `npm run db:reset:demo`. Коллекции Postman при этом продолжают работать: КР1 создаёт свои отгрузки с уникальными номерами.
+
+**Production-база (Neon).** Команда запускается на своём компьютере, но с адресом базы Neon. Переменные из терминала важнее файла `.env`, поэтому локальный `.env` менять не нужно:
+
+```powershell
+# PowerShell (Windows)
+$env:DATABASE_URL="postgresql://ЛОГИН:ПАРОЛЬ@ep-xxx.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+$env:DATABASE_SSL="true"
+$env:ADMIN_PASSWORD="ВашНадёжныйПароль1!"
+npm run seed:demo
+```
+
+```bash
+# bash (Linux, macOS)
+DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require" DATABASE_SSL=true ADMIN_PASSWORD="ВашНадёжныйПароль1!" npm run seed:demo
+```
+
+После этого закройте окно терминала, чтобы следующие команды снова работали с локальной базой.
+
+## CI/CD
+
+Файл [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) запускается при push в `main` или `ipr22`, при pull request в `main` и вручную (Actions → CI/CD → Run workflow).
+
+```
+backend (ESLint, Jest на PostgreSQL) ──┬──> docker (сборка образа и проверка запуска)
+frontend (ESLint, Vitest, сборка Vite) ─┤
+                                        └──> deploy-backend (Render Deploy Hook, ожидание нового коммита на /health)
+                                               └──> deploy-frontend (vercel pull → build → deploy --prebuilt)
+notify (всегда): итог каждого этапа в Telegram
+```
+
+Деплой начинается, только если прошли все проверки. Render получает хеш именно того коммита, который прошёл тесты, а workflow ждёт, пока `/health` вернёт этот хеш. Pull request проходит только проверки, без деплоя.
+
+### Секреты и переменные GitHub
+
+Settings → Secrets and variables → Actions:
+
+| Имя | Тип | Откуда взять |
+|---|---|---|
+| `RENDER_DEPLOY_HOOK_URL` | secret | Render → сервис → Settings → Deploy Hook |
+| `VERCEL_TOKEN` | secret | Vercel → Account Settings → Tokens → Create |
+| `VERCEL_ORG_ID` | secret | Vercel → Team Settings → General → Team ID (для личного аккаунта — Account Settings → General → Vercel ID) |
+| `VERCEL_PROJECT_ID` | secret | Vercel → проект → Settings → General → Project ID |
+| `TELEGRAM_BOT_TOKEN` | secret | @BotFather → `/newbot` |
+| `TELEGRAM_CHAT_ID` | secret | @userinfobot → поле `Id` |
+| `SENTRY_AUTH_TOKEN` | secret, необязательно | Sentry → Settings → Auth Tokens (загрузка source maps фронтенда) |
+| `BACKEND_URL` | variable | `https://ВАШ-СЕРВИС.onrender.com` |
+| `FRONTEND_URL` | variable | `https://ВАШ-ПРОЕКТ.vercel.app` |
+| `SENTRY_ORG`, `SENTRY_FRONTEND_PROJECT` | variable, необязательно | slug организации и проекта React в Sentry |
+
+## Деплой с нуля
+
+1. **Neon.** Зарегистрируйтесь на <https://neon.tech> через GitHub, создайте проект `wms` (регион Frankfurt), скопируйте строку подключения из Connection Details.
+2. **Render.** <https://render.com> → New → Blueprint → репозиторий `wms-qr-system`, ветка `ipr22`. Render прочитает [`render.yaml`](render.yaml) и попросит значения: `DATABASE_URL` из Neon, `CORS_ORIGINS` — адрес фронтенда на Vercel (пока можно `http://localhost:5173`, после шага 3 поменять), остальные можно оставить пустыми и заполнить позже. Скопируйте адрес сервиса `https://….onrender.com` и Deploy Hook (Settings).
+3. **Vercel.** <https://vercel.com> → Add New → Project → импорт репозитория, **Root Directory: `frontend`**, Framework: Vite. В Environment Variables добавьте `VITE_API_URL` = адрес Render (и `VITE_SENTRY_DSN`, когда появится). Deploy. Затем впишите адрес `https://….vercel.app` в `CORS_ORIGINS` на Render.
+4. **База.** Заполните production-базу командой из раздела «Заполнение базы данных».
+5. **GitHub.** Добавьте секреты и переменные из таблицы выше. Сделайте push в `ipr22` — workflow протестирует, задеплоит и пришлёт сообщение в Telegram.
+
+Автодеплой самих Render и Vercel выключен (`autoDeployTrigger: off` в `render.yaml`, `git.deploymentEnabled: false` в `frontend/vercel.json`): выкладку делает только GitHub Actions после тестов.
+
+## Мониторинг
+
+| Задача | Инструмент | Как настроено |
+|---|---|---|
+| Доступность | UptimeRobot | HTTP-мониторы `…/health` бэкенда и главной страницы фронтенда раз в 5 минут: время ответа, uptime, публичная статус-страница, письмо при падении. Запросы раз в 5 минут заодно не дают бесплатному сервису Render уснуть |
+| Падение → Telegram | Healthchecks.io | бэкенд раз в минуту шлёт heartbeat на `HEALTHCHECKS_PING_URL` (при недоступной базе — `/fail`); нет сигнала 1 мин + 3 мин grace — `@HealthchecksBot` пишет в Telegram. На бесплатном UptimeRobot интеграции с Telegram нет |
+| Логи | Better Stack Logs | транспорт `@logtail/winston`: старт и остановка сервера, каждый запрос (метод, маршрут, код, время), ошибки со стеком, события безопасности |
+| Ошибки | Sentry | `@sentry/node` (необработанные исключения и ответы 5xx), `@sentry/react` (ErrorBoundary, ошибки в браузере), source maps загружаются из CI |
+| Уведомления | Telegram | сборки — из GitHub Actions; ошибки 5xx и старт сервера — из бэкенда; падение и восстановление — из Healthchecks.io |
+| Метрики | `/metrics`, `/status` | время работы, память, CPU, счётчики запросов по кодам и маршрутам, время ответа (среднее, p95), график за час |
+
+Интеграции включаются переменными окружения на Render: `SENTRY_DSN`, `BETTER_STACK_SOURCE_TOKEN` и `BETTER_STACK_INGESTING_HOST`, `TELEGRAM_BOT_TOKEN` и `TELEGRAM_CHAT_ID`, `HEALTHCHECKS_PING_URL`. Без них сервер работает как раньше, только с файловыми логами. Подключённые интеграции видны на странице `/status` и в разделе «Мониторинг» фронтенда.
+
+Пароли, токены, cookie и заголовок `Authorization` маскируются (`[скрыто]`) перед записью в логи, Sentry и Telegram ([`src/utils/redact.js`](src/utils/redact.js)).
+
+Проверка Sentry: войдите администратором → «Мониторинг» → «Ошибка на сервере» (вызывает `POST /monitoring/test-error`) или «Ошибка во фронтенде».
 
 ## API
 
-Полное описание запросов и ответов — в [API.md](API.md) и в Swagger.
+Полное описание — в [API.md](API.md) и Swagger (`/api-docs`).
 
 | Метод и путь | Доступ |
 |---|---|
+| `GET /health`, `GET /metrics`, `GET /status` | все |
+| `POST /monitoring/test-error` | `admin` |
 | `POST /auth/register`, `POST /auth/login` | все |
 | `POST /auth/refresh`, `POST /auth/logout` | cookie `refreshToken` и заголовок `X-CSRF-Token` |
 | `GET /auth/me`, `GET /auth/sessions`, `POST /auth/logout-all` | после входа |
@@ -119,109 +229,65 @@ npm run dev      # сервер с автоперезапуском
 | `GET /users`, `PATCH /users/:id/role`, `POST /users/:id/unlock`, `DELETE /users/:id` | `admin` |
 | `GET /audit` | `admin` |
 
-Access-токен живёт 15 минут и передаётся в заголовке `Authorization: Bearer <token>`. Refresh-токен живёт 7 дней, хранится в cookie `HttpOnly; SameSite=Strict; Path=/auth` и при каждом обновлении заменяется новым.
+Access-токен живёт 15 минут и передаётся в заголовке `Authorization: Bearer <token>`. Refresh-токен живёт 7 дней в cookie `HttpOnly; Path=/auth` и при каждом обновлении заменяется. Локально cookie `SameSite=Strict`; в production фронтенд и API находятся на разных сайтах, поэтому `COOKIE_SAMESITE=none` (cookie автоматически становится `Secure`), а от CSRF защищает заголовок `X-CSRF-Token`.
 
 Формат ответов: успех — `{ "data": ... }`, ошибка — `{ "error": { "message": "...", "details": ... } }`.
 
-## Отгрузки
-
-Отгрузка — заказ покупателя, который собирают и отправляют со склада. Поля: номер заказа `orderNumber` (уникальный), получатель, адрес доставки, плановая дата, количество мест, вес, перевозчик, комментарий. Сервер выдаёт каждой отгрузке уникальный `qrCode` и отдаёт его картинкой для этикетки (`GET /shipments/:id/qr`, PNG или SVG). Терминал сканирует этикетку и находит отгрузку запросом `GET /shipments/scan/:code`.
-
-Статус меняется только по цепочке `new → picking → packed → shipped → delivered`. Отменить (`cancelled`) можно до отправки, недопустимый переход — `409`. После отправки карточка не редактируется.
-
-Список `GET /shipments` поддерживает поиск по номеру, получателю и адресу (`search`), фильтр по статусу и диапазону плановой даты (`status`, `plannedFrom`, `plannedTo`), сортировку (`sort`, `order`) и постраничный вывод. `GET /shipments/stats` показывает количество отгрузок по статусам, отгрузки на сегодня и просроченные, сумму мест и веса.
-
-```
-GET /shipments?status=new&plannedFrom=2026-11-01&plannedTo=2026-11-07&sort=plannedDate
-```
-
 ## Postman
-
-Две коллекции, Postman → Import → выбрать файл:
 
 | Файл | Что проверяет |
 |---|---|
-| [`postman/WMS-KR1.postman_collection.json`](postman/WMS-KR1.postman_collection.json) | 45 запросов: регистрация и вход, CRUD отгрузок, статусы, QR-код и поиск по нему, фильтры, сортировка, статистика, ошибки валидации, доступ без токена и с чужим токеном, действия администратора |
-| [`postman/WMS-API.postman_collection.json`](postman/WMS-API.postman_collection.json) | 43 запроса: меры защиты — роли, блокировка входа, CSRF, ротация refresh-токена, лимит сессий, товары и ячейки |
+| [`postman/WMS-KR1.postman_collection.json`](postman/WMS-KR1.postman_collection.json) | 45 запросов: вход, CRUD отгрузок, статусы, QR-код, фильтры, статистика, ошибки и права доступа |
+| [`postman/WMS-API.postman_collection.json`](postman/WMS-API.postman_collection.json) | 43 запроса: меры защиты ИПР1 (нужна чистая база: `npm run db:reset`) |
 
-У запросов есть проверки статусов и содержимого ответа, токены и идентификаторы передаются через переменные коллекции, поэтому папки выполняются по порядку. Учётная запись администратора задаётся переменными коллекции `adminEmail` и `adminPassword` и должна совпадать с `ADMIN_EMAIL` и `ADMIN_PASSWORD` из `.env`.
+Для проверки production замените переменную коллекции `baseUrl` на адрес Render.
 
-Коллекцию `WMS-KR1` можно запускать повторно без очистки базы: номера заказов и email получают уникальный суффикс, даты считаются от текущего дня. Коллекции `WMS-API` нужна чистая база (`npm run db:reset`). Счётчики лимитов хранятся в памяти, поэтому между полными прогонами сервер перезапускается.
+## Скрипты
 
-Прогон из командной строки:
-
-```bash
-npx newman run postman/WMS-KR1.postman_collection.json
-npx newman run postman/WMS-API.postman_collection.json
-```
+| Команда | Где | Что делает |
+|---|---|---|
+| `npm run dev` / `npm start` | корень | бэкенд с автоперезапуском / без |
+| `npm test` | корень | 45 тестов Jest и Supertest на базе `wms_test` |
+| `npm run lint` | корень | ESLint бэкенда |
+| `npm run dev` | `frontend` | фронтенд на <http://localhost:5173> |
+| `npm run build` | `frontend` | сборка в `frontend/dist` |
+| `npm test` / `npm run lint` | `frontend` | Vitest / ESLint фронтенда |
 
 ## Безопасность
 
-Базовые меры:
-
-- Helmet: Content-Security-Policy, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, без `X-Powered-By`;
-- глобальный лимит 100 запросов за 15 минут с IP, на вход и регистрацию — 20;
-- валидация Joi для тела, параметров пути и строки запроса, лишние поля отбрасываются;
-- запросы к базе только через Sequelize с привязкой параметров;
-- журнал подозрительных действий `logs/security-YYYY-MM-DD.log`.
-
-Дополнительные меры (номера по перечню требований):
-
-| № | Мера | Реализация |
-|---|---|---|
-| 1 | Защита от CSRF | double-submit: cookie `csrf_token` и заголовок `X-CSRF-Token` на `/auth/refresh` и `/auth/logout` |
-| 3 | Сложность пароля | от 8 символов, цифра и спецсимвол |
-| 5 | Короткий access-токен, refresh в httpOnly-cookie | 15 минут и 7 дней, ротация refresh-токена |
-| 6 | Блокировка после неудачных входов | 5 ошибок — блокировка на 15 минут, ответ 423 |
-| 7 | Аудит действий администратора | таблица `audit_logs`, `GET /audit` |
-| 9 | Защита от mass assignment | `stripUnknown`, роль при регистрации всегда `user` |
-| 12 | Лимит тела запроса | 100 КБ, ответ 413 |
-| 13 | Content-Security-Policy | `frame-ancestors 'none'` |
-| 15 | Только JSON | для POST, PUT, PATCH, иначе 415 |
-| 17 | Безопасное сравнение паролей | `bcrypt.compare`, для неизвестного email — сравнение с фиктивным хешем |
-| 18 | Защита от кликджекинга | `X-Frame-Options: DENY` |
-| 19 | Очистка HTML | теги удаляются из строковых полей |
-| 20 | Ограничение сессий | не больше 3, при новом входе отзывается самая старая |
-| 22 | CORS по белому списку | `CORS_ORIGINS`, чужой Origin — 403 |
-| 24 | Общие сообщения об ошибках | в production клиент видит только «Внутренняя ошибка сервера» |
-| 25 | Лимит на пользователя | 60 запросов в минуту после входа |
-| 29 | Проверка строки запроса | SQL-шаблоны в query отклоняются с кодом 400 |
-| 30 | Журнал ошибок | `logs/error-YYYY-MM-DD.log`, ротация, хранение 14 дней |
-
-Пароли хранятся только в виде bcrypt-хеша (12 раундов), refresh-токены — в виде SHA-256. Пароли и токены в журналы не записываются.
-
-## Журналы
-
-| Файл | Содержимое | Хранение |
-|---|---|---|
-| `logs/security-YYYY-MM-DD.log` | неудачные входы, блокировки, отказы по роли, CSRF, CORS, SQL-шаблоны, превышение лимитов | 30 дней |
-| `logs/error-YYYY-MM-DD.log` | ошибки сервера со стеком | 14 дней |
-| `logs/combined-YYYY-MM-DD.log` | все события | 14 дней |
-
-## Тесты
-
-```bash
-npm test
-```
-
-36 тестов: регистрация и вход, роли, CRUD отгрузок, права автора, статусы, QR-код, фильтры, сортировка и статистика, валидация, блокировка, CSRF, ротация refresh-токена, лимит сессий, очистка HTML, SQL в query, Content-Type, лимиты запросов, ответ на непредвиденную ошибку. Тесты используют отдельную базу из `TEST_DATABASE_URL`.
+- Helmet (CSP, `X-Frame-Options: DENY`, `nosniff`), HSTS и те же заголовки на Vercel;
+- лимиты запросов: общий с IP, на вход и регистрацию, на пользователя, на служебные адреса мониторинга;
+- Joi-валидация тела, пути и строки запроса, лишние поля отбрасываются;
+- запросы к базе только через Sequelize с привязкой параметров, SQL-шаблоны в query отклоняются;
+- bcrypt (12 раундов) для паролей, SHA-256 для refresh-токенов, ротация refresh-токена, лимит сессий, блокировка после 5 неудачных входов;
+- CORS по белому списку `CORS_ORIGINS`, CSRF double-submit для `/auth/refresh` и `/auth/logout`;
+- HTTPS на Render и Vercel, `TRUST_PROXY=true` за прокси Render;
+- секреты только в переменных окружения (`.env`, Render, Vercel, GitHub Secrets), `.env` не коммитится.
 
 ## Структура
 
 ```
+.github/workflows/deploy.yml   CI/CD
+render.yaml                    описание сервиса Render (Blueprint)
+Dockerfile                     образ бэкенда
 src/
-  config/        переменные окружения, подключение к базе, синхронизация схемы
-  constants/     роли, статусы отгрузок и переходы между ними
-  models/        User, Session, Shipment, Product, StorageLocation, AuditLog
-  middleware/    authenticate, roleGuard, validate, лимиты, защитные проверки, обработчик ошибок
-  validators/    схемы Joi
-  services/      аутентификация и аудит
-  controllers/   обработчики маршрутов
-  routes/        маршруты
-  utils/         логирование, токены, cookie, очистка строк
-  docs/          OpenAPI для Swagger
-  app.js, server.js, seed.js
-tests/           Jest и Supertest
-postman/         коллекции Postman
-docs/            ответы на контрольные вопросы
+  instrument.js    подключение Sentry (загружается первым)
+  config/          переменные окружения, база, синхронизация схемы
+  constants/       роли, статусы отгрузок и переходы
+  models/          User, Session, Shipment, Product, StorageLocation, AuditLog
+  middleware/      аутентификация, роли, валидация, лимиты, защита, журнал запросов, ошибки
+  validators/      схемы Joi
+  services/        аутентификация, аудит, метрики, проверка базы, Telegram
+  controllers/     обработчики маршрутов
+  routes/          маршруты, в том числе monitoring.js (/health, /metrics, /status)
+  views/status.html  страница метрик
+  utils/           логирование (Winston + Better Stack), маскирование секретов, токены, cookie
+  seed.js, demoData.js  администратор и демо-данные
+frontend/
+  src/pages/       страницы: вход, сводка, отгрузки, карточка, сканер, справочники, мониторинг
+  src/api.js       клиент API с обновлением токена
+  src/sentry.js    Sentry для React
+  vercel.json      настройки Vercel
+tests/             Jest и Supertest
+postman/           коллекции Postman
 ```

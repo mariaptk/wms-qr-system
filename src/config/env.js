@@ -98,6 +98,10 @@ module.exports = {
     sourceToken: isTest ? '' : (process.env.BETTER_STACK_SOURCE_TOKEN || ''),
     ingestingHost: process.env.BETTER_STACK_INGESTING_HOST || '',
   },
+  healthchecks: {
+    pingUrl: isTest ? '' : (process.env.HEALTHCHECKS_PING_URL || '').replace(/\/+$/, ''),
+    intervalMs: readInt('HEALTHCHECKS_INTERVAL_MS', 60 * 1000),
+  },
   telegram: {
     botToken: isTest ? '' : (process.env.TELEGRAM_BOT_TOKEN || ''),
     chatId: process.env.TELEGRAM_CHAT_ID || '',

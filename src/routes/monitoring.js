@@ -9,6 +9,7 @@ const { userLimiter, monitoringLimiter } = require('../middleware/rateLimiters')
 const metrics = require('../services/metrics');
 const { checkDatabase } = require('../services/health');
 const { isTelegramEnabled } = require('../services/telegram');
+const { isHeartbeatEnabled } = require('../services/heartbeat');
 const { isLogtailEnabled } = require('../utils/logger');
 
 const router = express.Router();
@@ -47,6 +48,7 @@ router.get('/metrics', asyncHandler(async (_req, res) => {
         sentry: Boolean(config.sentry.dsn),
         betterStack: isLogtailEnabled(),
         telegram: isTelegramEnabled(),
+        healthchecks: isHeartbeatEnabled(),
       },
     },
   });

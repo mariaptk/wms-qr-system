@@ -49,7 +49,7 @@ describe('GET /metrics', () => {
     expect(m.requests.topRoutes).toEqual(expect.arrayContaining([{ route: 'GET /products', count: expect.any(Number) }]));
     expect(m.history.length).toBeGreaterThanOrEqual(1);
     expect(m.db.status).toBe('ok');
-    expect(m.integrations).toEqual({ sentry: false, betterStack: false, telegram: false });
+    expect(m.integrations).toEqual({ sentry: false, betterStack: false, telegram: false, healthchecks: false });
   });
 
   test('маршрут считается шаблоном, без конкретного id', async () => {
