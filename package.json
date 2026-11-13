@@ -9,10 +9,12 @@
     "test": "jest --runInBand",
     "lint": "eslint .",
     "seed": "node src/seed.js",
-    "db:reset": "node src/seed.js --reset"
+    "seed:demo": "node src/seed.js --demo",
+    "db:reset": "node src/seed.js --reset",
+    "db:reset:demo": "node src/seed.js --reset --demo"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19"
   },
   "license": "MIT",
   "dependencies": {
