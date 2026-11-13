@@ -1,6 +1,6 @@
 {
   "name": "wms-qr-system",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "REST API системы управления складом и отгрузкой товаров с QR-кодами",
   "main": "src/server.js",
   "scripts": {

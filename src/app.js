@@ -53,7 +53,8 @@ app.use(cors({
     return callback(null, false);
   },
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+  // sentry-trace и baggage добавляет Sentry во фронтенде, чтобы связать ошибку в браузере с запросом к API.
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'sentry-trace', 'baggage'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 }));
 app.use(cookieParser());
