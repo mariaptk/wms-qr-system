@@ -1,0 +1,238 @@
+# CI/CD: линтинг и тесты бэкенда и фронтенда, сборка Docker-образа,
+# деплой бэкенда на Render и фронтенда на Vercel, уведомление в Telegram.
+# Деплой запускается только при push в main или ipr22 и только если все проверки прошли.
+name: CI/CD
+
+on:
+  push:
+    branches: [main, ipr22]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Два деплоя одной ветки не идут параллельно: второй ждёт окончания первого.
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  backend:
+    name: Backend — ESLint и Jest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: wms
+          POSTGRES_PASSWORD: wms
+          POSTGRES_DB: wms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wms -d wms_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Jest (API-тесты на PostgreSQL)
+        run: npm test
+
+  frontend:
+    name: Frontend — ESLint, Vitest, сборка
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: Vitest
+        run: npm test
+      - name: Сборка Vite
+        run: npm run build
+        env:
+          VITE_API_URL: https://example.invalid
+
+  docker:
+    name: Docker-образ бэкенда
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Сборка образа
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: wms-api:${{ github.sha }}
+          build-args: GIT_COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Проверка образа (приложение загружается)
+        run: |
+          docker run --rm \
+            -e NODE_ENV=production \
+            -e DATABASE_URL=postgres://none:none@127.0.0.1:1/none \
+            -e JWT_SECRET=ci-access-secret-0123456789abcdefghijklmnop \
+            -e JWT_REFRESH_SECRET=ci-refresh-secret-0123456789abcdefghijklmn \
+            wms-api:${{ github.sha }} node -e "require('./src/app'); console.log('Образ собран, приложение загружается')"
+
+  deploy-backend:
+    name: Деплой бэкенда на Render
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [backend, frontend, docker]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment:
+      name: production-backend
+      url: ${{ vars.BACKEND_URL }}
+    steps:
+      - name: Запуск деплоя через Deploy Hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::Секрет RENDER_DEPLOY_HOOK_URL не задан (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+          # ref — ровно тот коммит, который прошёл тесты.
+          curl -fsS -X POST "${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}" -o /dev/null
+          echo "Render начал сборку коммита ${GITHUB_SHA::7}"
+      - name: Ожидание новой версии на /health
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+        run: |
+          if [ -z "$BACKEND_URL" ]; then
+            echo "::error::Переменная BACKEND_URL не задана (Settings → Secrets and variables → Actions → Variables)"
+            exit 1
+          fi
+          for attempt in $(seq 1 60); do
+            body=$(curl -fsS --max-time 30 "${BACKEND_URL%/}/health" || true)
+            commit=$(echo "$body" | jq -r '.data.commit // empty' 2>/dev/null || true)
+            status=$(echo "$body" | jq -r '.data.status // empty' 2>/dev/null || true)
+            echo "Попытка $attempt: status=${status:-нет ответа}, commit=${commit:0:7}"
+            if [ "$commit" = "$GITHUB_SHA" ] && [ "$status" = "ok" ]; then
+              echo "Бэкенд обновлён: ${BACKEND_URL}"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::За 15 минут на ${BACKEND_URL}/health не появился коммит ${GITHUB_SHA::7}. Смотрите вкладку Events/Logs в Render."
+          exit 1
+
+  deploy-frontend:
+    name: Деплой фронтенда на Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: deploy-backend
+    environment:
+      name: production-frontend
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global vercel@latest
+      # Root Directory проекта в Vercel — frontend, поэтому команды выполняются из корня репозитория.
+      - name: Настройки и переменные проекта (VITE_API_URL и др.)
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Сборка
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+        env:
+          VITE_RELEASE: wms-frontend@${{ github.sha }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_FRONTEND_PROJECT }}
+      - name: Публикация
+        id: deploy
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Опубликовано: $url"
+      - name: Проверка, что сайт открывается
+        env:
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+        run: curl -fsS -o /dev/null -w "HTTP %{http_code}\n" "${FRONTEND_URL:-${{ steps.deploy.outputs.url }}}"
+
+  notify:
+    name: Уведомление в Telegram
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, docker, deploy-backend, deploy-frontend]
+    if: always()
+    steps:
+      - name: Отправка статуса сборки
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title || 'ручной запуск' }}
+          RESULT_BACKEND: ${{ needs.backend.result }}
+          RESULT_FRONTEND: ${{ needs.frontend.result }}
+          RESULT_DOCKER: ${{ needs.docker.result }}
+          RESULT_DEPLOY_BACKEND: ${{ needs.deploy-backend.result }}
+          RESULT_DEPLOY_FRONTEND: ${{ needs.deploy-frontend.result }}
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Секреты Telegram не заданы, уведомление пропущено"
+            exit 0
+          fi
+          mark() { case "$1" in success) echo "OK";; skipped) echo "пропущено";; cancelled) echo "отменено";; *) echo "ОШИБКА";; esac; }
+          overall="УСПЕХ"
+          for r in "$RESULT_BACKEND" "$RESULT_FRONTEND" "$RESULT_DOCKER" "$RESULT_DEPLOY_BACKEND" "$RESULT_DEPLOY_FRONTEND"; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then overall="ПРОВАЛ"; fi
+          done
+          text="[CI/CD] ${overall}: ${GITHUB_REPOSITORY} (${GITHUB_REF_NAME})
+          Коммит ${GITHUB_SHA::7}: $(echo "$COMMIT_MESSAGE" | head -n 1)
+          Автор: ${GITHUB_ACTOR}
+
+          Backend, тесты: $(mark "$RESULT_BACKEND")
+          Frontend, тесты и сборка: $(mark "$RESULT_FRONTEND")
+          Docker-образ: $(mark "$RESULT_DOCKER")
+          Деплой Render: $(mark "$RESULT_DEPLOY_BACKEND")
+          Деплой Vercel: $(mark "$RESULT_DEPLOY_FRONTEND")"
+          if [ "$overall" = "УСПЕХ" ] && [ "$RESULT_DEPLOY_FRONTEND" = "success" ]; then
+            text="${text}
+
+          Приложение: ${FRONTEND_URL}
+          API: ${BACKEND_URL}"
+          fi
+          text="${text}
+
+          Подробности: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${text}" \
+            --data-urlencode "disable_web_page_preview=true" -o /dev/null
+          echo "Уведомление отправлено"

@@ -15,3 +15,6 @@ postman/*
 # Временные файлы Word
 ~$*
 ~WRL*.tmp
+
+# Vercel CLI
+.vercel/

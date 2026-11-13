@@ -44,9 +44,17 @@ const userLimiter = buildLimiter({
   keyGenerator: (req) => req.user?.id || 'anonymous',
 });
 
+// Служебные адреса опрашиваются часто (страница метрик раз в 5 секунд), поэтому у них свой лимит.
+const monitoringLimiter = buildLimiter({
+  windowMs: 60 * 1000,
+  max: config.isTest ? 10000 : 120,
+  event: 'rate_limit_monitoring',
+});
+
 module.exports = {
   buildLimiter,
   globalLimiter,
+  monitoringLimiter,
   authLimiter,
   userLimiter,
 };
