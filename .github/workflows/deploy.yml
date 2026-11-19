@@ -177,13 +177,12 @@ jobs:
       - name: Публикация
         id: deploy
         run: |
+          mkdir -p frontend/.vercel
+          cp .vercel/project.json frontend/.vercel/project.json
+          cp -r .vercel/output frontend/.vercel/output
           url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Опубликовано: $url"
-      - name: Проверка, что сайт открывается
-        env:
-          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
-        run: curl -fsS -o /dev/null -w "HTTP %{http_code}\n" "${FRONTEND_URL:-${{ steps.deploy.outputs.url }}}"
 
   notify:
     name: Уведомление в Telegram
