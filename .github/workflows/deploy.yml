@@ -177,9 +177,7 @@ jobs:
       - name: Публикация
         id: deploy
         run: |
-          mkdir -p frontend/.vercel
-          cp .vercel/project.json frontend/.vercel/project.json
-          cp -r .vercel/output frontend/.vercel/output
+          unset VERCEL_ORG_ID VERCEL_PROJECT_ID
           url=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Опубликовано: $url"
