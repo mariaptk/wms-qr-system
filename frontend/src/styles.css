@@ -141,8 +141,8 @@ a.kpi:hover { text-decoration: none; box-shadow: 0 4px 14px rgba(16, 24, 40, .1)
 .table .num { text-align: right; white-space: nowrap; }
 .table tr.clickable { cursor: pointer; }
 .table tr.clickable:hover td { background: #f8faff; }
-.card > .table th { background: transparent; padding-left: 0; }
-.card > .table td { padding-left: 0; }
+.card > .table th { background: transparent; padding-left: 16px; }
+.card > .table td { padding-left: 16px; }
 .pager { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 16px; }
 
 .tabs { display: flex; gap: 6px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
