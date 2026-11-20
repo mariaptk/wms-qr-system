@@ -1,6 +1,6 @@
 {
   "name": "wms-qr-system",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "REST API системы управления складом и отгрузкой товаров с QR-кодами",
   "main": "src/server.js",
   "scripts": {
@@ -9,13 +9,18 @@
     "test": "jest --runInBand",
     "lint": "eslint .",
     "seed": "node src/seed.js",
-    "db:reset": "node src/seed.js --reset"
+    "seed:demo": "node src/seed.js --demo",
+    "db:reset": "node src/seed.js --reset",
+    "db:reset:demo": "node src/seed.js --reset --demo"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.19"
   },
   "license": "MIT",
   "dependencies": {
+    "@logtail/node": "^0.6.1",
+    "@logtail/winston": "^0.6.1",
+    "@sentry/node": "^11.12.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

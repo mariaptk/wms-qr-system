@@ -1,0 +1,49 @@
+# Blueprint Render: New → Blueprint → репозиторий wms-qr-system.
+# Значения с sync: false Render спросит при создании; JWT-секреты сгенерирует сам.
+services:
+  - type: web
+    name: wms-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: ipr22
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    # Деплой запускает GitHub Actions после тестов (Deploy Hook), а не каждый push.
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: TZ
+        value: Europe/Minsk
+      - key: TRUST_PROXY
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none
+      - key: DATABASE_SSL
+        value: "true"
+      - key: RATE_LIMIT_MAX
+        value: "1000"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: BETTER_STACK_SOURCE_TOKEN
+        sync: false
+      - key: BETTER_STACK_INGESTING_HOST
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: HEALTHCHECKS_PING_URL
+        sync: false

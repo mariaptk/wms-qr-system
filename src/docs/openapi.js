@@ -33,7 +33,7 @@ const openapi = {
     version: '0.2.0',
     description: 'REST API склада: аутентификация JWT, роли, отгрузки с QR-кодами, товары и ячейки.',
   },
-  servers: [{ url: 'http://localhost:3000' }],
+  servers: [{ url: '/', description: 'Текущий сервер (локально или Render)' }],
   tags: [
     { name: 'Auth' },
     { name: 'Users' },
@@ -41,6 +41,7 @@ const openapi = {
     { name: 'Products' },
     { name: 'Locations' },
     { name: 'Audit' },
+    { name: 'Monitoring' },
   ],
   components: {
     securitySchemes: {
@@ -86,8 +87,38 @@ const openapi = {
   paths: {
     '/health': {
       get: {
-        summary: 'Проверка живости',
-        responses: { 200: { description: 'Сервис отвечает' } },
+        tags: ['Monitoring'],
+        summary: 'Проверка доступности для UptimeRobot: сервер, база, версия и коммит',
+        responses: {
+          200: { description: 'Сервис и база работают' },
+          503: { description: 'База данных недоступна' },
+        },
+      },
+    },
+    '/metrics': {
+      get: {
+        tags: ['Monitoring'],
+        summary: 'Метрики: время работы, память, CPU, счётчики запросов, время ответа, история за час',
+        responses: { 200: { description: 'Метрики в JSON' } },
+      },
+    },
+    '/status': {
+      get: {
+        tags: ['Monitoring'],
+        summary: 'HTML-страница с метриками, обновляется каждые 5 секунд',
+        responses: { 200: { description: 'HTML', content: { 'text/html': {} } } },
+      },
+    },
+    '/monitoring/test-error': {
+      post: {
+        tags: ['Monitoring'],
+        summary: 'Тестовая ошибка для проверки Sentry и Telegram (admin)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          401: { description: 'Нет токена' },
+          403: { description: 'Не администратор' },
+          500: { description: 'Тестовая ошибка отправлена в Sentry' },
+        },
       },
     },
     '/auth/register': {

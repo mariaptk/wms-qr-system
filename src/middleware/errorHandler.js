@@ -1,6 +1,8 @@
+const Sentry = require('@sentry/node');
 const config = require('../config/env');
 const { AppError, toClientError } = require('../utils/errors');
 const { logger } = require('../utils/logger');
+const { notify } = require('../services/telegram');
 
 function normalize(err) {
   if (err.type === 'entity.too.large' || err.status === 413) {
@@ -39,6 +41,14 @@ function errorHandler(err, req, res, _next) {
 
   if (!normalized.isOperational || client.statusCode >= 500) {
     logger.error({ ...record, stack: err.stack });
+    const eventId = Sentry.captureException(err, {
+      tags: { requestId: req.id, route: `${req.method} ${req.baseUrl}${req.route?.path || req.path}` },
+      user: req.user ? { id: req.user.id, role: req.user.role } : undefined,
+    });
+    notify(
+      `[ОШИБКА] WMS API: код ${client.statusCode}\n${req.method} ${req.originalUrl.split('?')[0]}\n${err.name}: ${err.message}\nrequestId: ${req.id}${eventId && config.sentry.dsn ? `\nSentry: ${eventId}` : ''}`,
+      { key: `error:${req.method}:${req.route?.path || req.path}:${err.message.slice(0, 60)}` },
+    );
   } else {
     logger.info(record);
   }
